@@ -43,9 +43,10 @@ tower-defense/
 │   ├── combat-flow.mjs         26 项建造/升级/协同/卖塔/击杀
 │   ├── ui-flow.mjs             33 项真实点击 UI 交互
 │   ├── phase6-flow.mjs         29 项地图2/胜负/引导/存档/音效
+│   ├── stress-flow.mjs         ★ 11 项对象池复用 / 场景泄漏 / 完整跑关
 │   ├── smoke-flow.mjs          场景链路 + 敌人行走
 │   ├── headless-check.mjs      6 视口无错误检查
-│   ├── perf-check.mjs          ★ 体积/首屏/帧率测量
+│   ├── perf-check.mjs          体积/首屏/帧率测量
 │   └── screenshot.mjs          三视口 × 五阶段截图
 ├── assets/
 │   └── assets.js               ★ 素材清单（当前为空 = 全部代码占位）
@@ -73,15 +74,35 @@ node tests\logic-check.mjs                       # 191 项纯逻辑断言
 node tests\combat-flow.mjs                       # 26 项建造/升级/协同/卖塔/击杀
 node tests\ui-flow.mjs                           # 33 项真实点击的 UI 交互
 node tests\phase6-flow.mjs                       # 29 项地图2/胜负/引导/存档/音效解锁
+node tests\stress-flow.mjs                       # 11 项对象池复用 / 场景泄漏 / 完整跑关
 node tests\smoke-flow.mjs                        # 2 视口场景链路 + 敌人行走
 node tests\headless-check.mjs http://192.168.1.8:8788/index.html   # 6 视口 JS 错误
+node tests\perf-check.mjs                        # 体积 / 首屏 / 帧率（帧率不可作验收依据）
 node tests\screenshot.mjs                        # 三视口 × 五阶段截图 → docs/screenshots/
 ```
 
 > `tests/_nav.mjs` 是共享的场景导航辅助。**不要在任何测试里硬编码点击坐标** ——
 > 见下方「已修正的缺陷」第 6 条。
 
-**当前基线**：**191** 逻辑 · **26** 战斗 · **33** UI · **29** Phase6 · **2** 链路 · **6 视口 0 错误** = **279 项断言全绿**。
+**当前基线**：**191** 逻辑 · **26** 战斗 · **33** UI · **29** Phase6 · **11** 压力 ·
+**2** 链路 · **6 视口 0 错误** = **290 项断言全绿**。
+
+### 真机验收辅助：`?debug=1`
+
+```
+http://192.168.1.8:8788/?debug=1
+```
+
+右上角会显示调试面板，**省得为了验收装任何工具**：
+
+```
+FPS 58.2          ← spec §7.2 第①条要读的数
+怪 28  塔 15  弹 6
+池 4/0/2          ← 对象池空闲数（持续增长 = 泄漏）
+cell 46.9px 竖屏   ← 第②条要读的数
+```
+
+不带 `?debug=1` 时面板隐藏，不影响正常游玩。
 
 ---
 

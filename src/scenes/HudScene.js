@@ -57,6 +57,20 @@ export default class HudScene extends Phaser.Scene {
 
     this.sellArmedUntil = 0
 
+    // ── 调试面板：URL 加 ?debug=1 才显示 ──
+    // 真机验收帧率时用它（spec §7.2 第①条），省得装任何工具。
+    // 默认关闭，不污染正常游玩界面。
+    this.debugOn = (() => {
+      try { return new URLSearchParams(location.search).has('debug') } catch { return false }
+    })()
+    if (this.debugOn) {
+      this.debugText = this.add.text(0, 0, '', {
+        fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
+        fontSize: '11px', color: '#7fe07f', backgroundColor: '#000000cc',
+        padding: { x: 6, y: 4 }, align: 'right', lineSpacing: 2,
+      }).setOrigin(1, 0).setDepth(30)
+    }
+
     this.layout()
     this.scale.on('resize', () => this.layout())
   }
@@ -151,6 +165,8 @@ export default class HudScene extends Phaser.Scene {
 
       this.layoutPanel(W, H, landscape, 0)
     }
+
+    if (this.debugText) this.debugText.setPosition(W - 6, 6)
   }
 
   layoutPanel(W, H, landscape, side) {
@@ -197,6 +213,14 @@ export default class HudScene extends Phaser.Scene {
 
     this.cancelBtn.setVisible(!!gs.buildMode)
     this.refreshPanel(gs)
+
+    if (this.debugText) {
+      this.debugText.setText(
+        `FPS ${s.fps.toFixed(1)}\n` +
+        `怪 ${s.enemies}  塔 ${s.towers}  弹 ${s.projectiles}\n` +
+        `池 ${s.pools.enemy}/${s.pools.tower}/${s.pools.proj}\n` +
+        `cell ${s.cell.toFixed(1)}px ${s.landscape ? '横屏' : '竖屏'}`)
+    }
   }
 
   refreshPanel(gs) {

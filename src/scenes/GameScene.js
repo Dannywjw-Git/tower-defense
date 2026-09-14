@@ -202,6 +202,14 @@ export default class GameScene extends Phaser.Scene {
       hasSelection: !!this.selectedTower,
       paused: this.paused,
       speed: this.speed,
+      // 真机验收用（spec §7.2 第①条要在真机上读帧率，游戏内显示最省事）
+      fps: Math.round(this.game.loop.actualFps * 10) / 10,
+      projectiles: this.projectiles.length,
+      pools: {
+        enemy: this.enemyPool.length,
+        tower: this.towerPool.length,
+        proj: this.projPool.length,
+      },
     }
   }
 
