@@ -1,0 +1,519 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="data:,">
+<title>纯逻辑自检</title>
+<style>
+  body {
+    margin: 0; padding: 14px; background: #0b0b0f; color: #d8d8dc;
+    font: 13px/1.65 ui-monospace, Menlo, Consolas, monospace;
+  }
+  h1 { font-size: 16px; margin: 0 0 10px; color: #e8e8ea; }
+  pre { margin: 0; white-space: pre-wrap; }
+  .pass { color: #5bd75b; }
+  .fail { color: #ff5c5c; }
+  .sum { margin-top: 12px; font-weight: bold; }
+</style>
+</head>
+<body>
+<h1>纯逻辑自检（不依赖 Phaser）</h1>
+<pre id="out">运行中…</pre>
+
+<script type="module">
+import { computeLayout, cellToPixel, pixelToCell, COLS, ROWS } from '../src/systems/Layout.js'
+import { buildGrid, countCells, buildableCount, PATH, BLOCKED } from '../src/systems/MapGrid.js'
+import { buildPath, positionAt } from '../src/systems/PathMath.js'
+import { Economy, SELL_REFUND_RATE, waveClearBonus } from '../src/systems/Economy.js'
+import { pickTarget, STRATEGY } from '../src/systems/Targeting.js'
+import { computeSynergy, MAX_STACKS } from '../src/systems/Adjacency.js'
+import { WaveManager, hpForWave, PHASE } from '../src/systems/WaveManager.js'
+import { TOWERS, TOWER_ORDER, towerDef, totalInvested, upgradeCost, MAX_LEVEL } from '../src/data/towers.js'
+import { allocateDamage, applyDamage, SPLASH_RATIO } from '../src/systems/Combat.js'
+import { ENEMIES, ENEMY_ORDER, enemyDef, enemyHpAtWave } from '../src/data/enemies.js'
+import * as Save from '../src/systems/Save.js'
+import * as Audio from '../src/systems/Audio.js'
+import level01 from '../src/data/levels/level-01.js'
+import level02 from '../src/data/levels/level-02.js'
+
+let pass = 0
+const lines = []
+
+function ok(name, cond, extra) {
+  if (cond) { pass++; lines.push('  ✅ ' + name) }
+  else lines.push('  ❌ ' + name + (extra ? '   ' + extra : ''))
+}
+const eq = (name, a, b) => ok(name + '  [' + a + ' === ' + b + ']', a === b)
+
+// ─────────── Layout ───────────
+lines.push('Layout · 格子尺寸')
+
+const portrait = computeLayout(375, 812)
+ok('竖屏识别正确', portrait.landscape === false)
+ok('竖屏 cell ≥ 44 px', portrait.cell >= 44, 'cell=' + portrait.cell.toFixed(1))
+
+const landscape = computeLayout(812, 375)
+ok('横屏识别正确', landscape.landscape === true)
+ok('横屏 cell ≥ 44 px', landscape.cell >= 44, 'cell=' + landscape.cell.toFixed(1))
+
+lines.push('Layout · 任何视口都不得溢出（这是 Phase 0 抓到的真实缺陷）')
+for (const [W, H] of [[375, 812], [360, 640], [320, 568], [430, 932], [812, 375], [1440, 900]]) {
+  const L = computeLayout(W, H)
+  ok(`${W}×${H}  网格 ${L.gridW.toFixed(0)}×${L.gridH.toFixed(0)} 不超出屏幕`,
+     L.gridW <= W + 0.01 && L.gridH <= H + 0.01,
+     `cell=${L.cell.toFixed(1)}`)
+}
+
+lines.push('Layout · 坐标往返')
+{
+  const L = computeLayout(375, 812)
+  for (const [cx, cy] of [[0, 0], [3, 2], [7, 4]]) {
+    const p = cellToPixel(L, cx, cy)
+    const back = pixelToCell(L, p.x, p.y)
+    ok(`(${cx},${cy}) → 像素 → 格 往返一致`, back.cx === cx && back.cy === cy && back.inside,
+       `got (${back.cx},${back.cy})`)
+  }
+  ok('网格外 → inside=false', pixelToCell(L, -50, -50).inside === false)
+}
+
+// ─────────── MapGrid ───────────
+lines.push('MapGrid · 关卡展开')
+const grid = buildGrid(level01)
+eq('行数', grid.length, ROWS)
+eq('列数', grid[0].length, COLS)
+
+const counts = countCells(grid)
+ok('路径格数 > 0', counts[PATH] > 0, 'path=' + counts[PATH])
+ok('可建塔位 ≥ 20（spec §4.3 承诺 25–28）', buildableCount(grid) >= 20,
+   'buildable=' + buildableCount(grid))
+
+const [sx, sy] = level01.path[0]
+const [ex, ey] = level01.path[level01.path.length - 1]
+ok('起点是路径格', grid[sy][sx] === PATH)
+ok('终点是路径格', grid[ey][ex] === PATH)
+
+lines.push('MapGrid · 非法数据必须报错（不能静默画错）')
+{
+  let threw = false
+  try { buildGrid({ id: 'bad', cols: 8, rows: 5, path: [[0, 0], [1, 1]] }) } catch { threw = true }
+  ok('斜线段路径抛错', threw)
+
+  let threw2 = false
+  try { buildGrid({ id: 'bad2', cols: 3, rows: 3, path: [[0, 0], [9, 0]] }) } catch { threw2 = true }
+  ok('路径越界抛错', threw2)
+}
+
+// ─────────── PathMath ───────────
+lines.push('PathMath · 路径插值')
+{
+  const path = buildPath([[0, 0], [3, 0], [3, 2]])
+  eq('总长度 = 3 + 2', path.total, 5)
+
+  const p0 = positionAt(path, 0)
+  ok('dist=0 位于起点', p0.x === 0 && p0.y === 0 && !p0.done)
+
+  const p1 = positionAt(path, 1.5)
+  ok('dist=1.5 位于首段中点', p1.x === 1.5 && p1.y === 0, `got (${p1.x},${p1.y})`)
+
+  const p2 = positionAt(path, 4)
+  ok('dist=4 位于第二段', p2.x === 3 && p2.y === 1, `got (${p2.x},${p2.y})`)
+
+  const p3 = positionAt(path, 5)
+  ok('dist=total 到终点且 done', p3.x === 3 && p3.y === 2 && p3.done === true)
+
+  const p4 = positionAt(path, 99)
+  ok('超出长度夹在终点', p4.x === 3 && p4.y === 2 && p4.done === true)
+
+  let threw = false
+  try { buildPath([[0, 0], [1, 1]]) } catch { threw = true }
+  ok('斜线段抛错', threw)
+
+  let threw2 = false
+  try { buildPath([[0, 0]]) } catch { threw2 = true }
+  ok('单点路径抛错', threw2)
+}
+
+// ─────────── Economy ───────────
+lines.push('Economy · 金币与退款')
+{
+  const eco = new Economy(120)
+  eq('初始金币', eco.gold, 120)
+
+  ok('够钱时 spend 成功', eco.spend(50) === true)
+  eq('扣款后余额', eco.gold, 70)
+
+  ok('不够钱时 spend 返回 false', eco.spend(100) === false)
+  eq('失败后余额不变（金币不得为负）', eco.gold, 70)
+
+  eco.earn(30)
+  eq('earn 后余额', eco.gold, 100)
+
+  eq('退款率常量', SELL_REFUND_RATE, 0.7)
+  eq('退款 = floor(100 × 0.7)', eco.sellRefund(100), 70)
+  eq('退款已入账', eco.gold, 170)
+  eq('退款向下取整 floor(51 × 0.7)', eco.sellRefund(51), 35)
+
+  eq('每波清空奖励 波3 = 20 + 15', waveClearBonus(3), 35)
+
+  let threw = false
+  try { eco.spend(-1) } catch { threw = true }
+  ok('负数 spend 抛错', threw)
+
+  let threw2 = false
+  try { new Economy(-5) } catch { threw2 = true }
+  ok('负初始金币抛错', threw2)
+}
+
+// ─────────── Targeting ───────────
+lines.push('Targeting · 索敌')
+{
+  const tower = { gx: 2, gy: 2, range: 2 }
+  const mk = (id, gx, gy, pathDist, hp) => ({ id, gx, gy, pathDist, hp, alive: true })
+
+  const near = mk('near', 2.5, 2, 3, 50)      // 最近，但走得少
+  const ahead = mk('ahead', 3.5, 2, 9, 50)    // 较远，但最靠近终点
+  const tank = mk('tank', 2, 3, 5, 200)       // HP 最高
+  const far = mk('far', 9, 9, 99, 999)        // 射程外
+  const dead = mk('dead', 2.2, 2, 100, 0)     // 已死（hp=0）
+  const all = [near, ahead, tank, far, dead]
+
+  eq('FIRST 选最靠近终点的', pickTarget(tower, all, STRATEGY.FIRST).id, 'ahead')
+  ok('FIRST 不会选到死亡单位', pickTarget(tower, all, STRATEGY.FIRST).id !== 'dead')
+  eq('CLOSEST 选最近的', pickTarget(tower, all, STRATEGY.CLOSEST).id, 'near')
+  eq('STRONGEST 选 HP 最高的', pickTarget(tower, all, STRATEGY.STRONGEST).id, 'tank')
+  ok('射程外永不入选', pickTarget(tower, [far], STRATEGY.FIRST) === null)
+  ok('空列表返回 null', pickTarget(tower, [], STRATEGY.FIRST) === null)
+  ok('全部超射程返回 null', pickTarget({ gx: 0, gy: 0, range: 0.5 }, all) === null)
+
+  let threw = false
+  try { pickTarget(tower, all, 'nope') } catch { threw = true }
+  ok('未知策略抛错（不静默兜底）', threw)
+}
+
+// ─────────── Adjacency ───────────
+lines.push('Adjacency · 协同')
+{
+  eq('无邻居 → 0 层', computeSynergy('arrow', []).stacks, 0)
+  eq('无邻居 → ×1.0', computeSynergy('arrow', []).damageMult, 1)
+
+  eq('同类相邻 → 0 层（关键：防止 6 种塔退化成 1 种）',
+     computeSynergy('arrow', ['arrow', 'arrow', 'arrow']).stacks, 0)
+
+  const two = computeSynergy('arrow', ['cannon', 'ice'])
+  eq('2 个异类 → 2 层', two.stacks, 2)
+  ok('2 层 → ×1.10', Math.abs(two.damageMult - 1.10) < 1e-9, 'got ' + two.damageMult)
+
+  const five = computeSynergy('arrow', ['cannon', 'ice', 'tesla', 'poison', 'cannon'])
+  eq('5 个异类 → 封顶 MAX_STACKS', five.stacks, MAX_STACKS)
+  ok('封顶 → ×1.20', Math.abs(five.damageMult - 1.20) < 1e-9, 'got ' + five.damageMult)
+
+  const arrowWithIce = computeSynergy('arrow', ['ice'])
+  ok('冰邻接 → 箭塔获得特例', arrowWithIce.specials.length === 1
+     && arrowWithIce.specials[0].from === 'ice')
+  ok('特例为攻速 ×1.20', arrowWithIce.specials[0].stat === 'fireRate'
+     && arrowWithIce.specials[0].mult === 1.20)
+
+  const iceWithArrow = computeSynergy('ice', ['arrow'])
+  eq('反向不获得特例（单向）', iceWithArrow.specials.length, 0)
+  eq('但反向仍吃通用异类加成', iceWithArrow.stacks, 1)
+
+  ok('毒邻接 → 炮塔溅射特例',
+     computeSynergy('cannon', ['poison']).specials.some(s => s.stat === 'splash'))
+  ok('冰邻接 → 电塔连锁 +1',
+     computeSynergy('tesla', ['ice']).specials.some(s => s.stat === 'chain' && s.add === 1))
+
+  const both = computeSynergy('arrow', ['ice', 'cannon'])
+  eq('冰+炮 → 2 层通用（伤害维度）', both.stacks, 2)
+  eq('冰+炮 → 同时保有特例（攻速维度，不冲突）', both.specials.length, 1)
+}
+
+// ─────────── WaveManager ───────────
+lines.push('WaveManager · 波次与 HP 曲线')
+{
+  eq('第 1 波 = 基础值', hpForWave(60, 1), 60)
+  eq('第 2 波 = 60 × 1.18', hpForWave(60, 2), 71)
+  eq('第 6 波 = 60 × 1.9', hpForWave(60, 6), 114)
+  eq('线性（非指数）：第 11 波', hpForWave(60, 11), Math.round(60 * (1 + 0.18 * 10)))
+
+  const waves = [
+    { type: 'normal', count: 3, baseHp: 60, interval: 0.5 },
+    { type: 'fast', count: 2, baseHp: 35, interval: 0.5 },
+  ]
+  const wm = new WaveManager(waves, { prepTime: 1, waveInterval: 1 })
+
+  eq('初始阶段 PREP', wm.phase, PHASE.PREP)
+  eq('初始波号 0', wm.wave, 0)
+  eq('总波数 2', wm.total, 2)
+
+  eq('准备期内不刷怪', wm.update(0.5).spawns.length, 0)
+  ok('准备期倒计时递减', wm.countdown < 1)
+
+  const r1 = wm.update(1)          // 跨过准备期；溢出的 0.5s 必须被用于刷怪
+  eq('开始第 1 波', r1.startedWave, 1)
+  eq('准备期溢出时间被利用：间隔 0.5s、溢出 0.5s → 刷 2 只', r1.spawns.length, 2)
+  eq('刷出 normal', r1.spawns[0].type, 'normal')
+  eq('HP 按波1 计算', r1.spawns[0].hp, 60)
+
+  wm.update(1)                     // 间隔 0.5 秒 → 1 秒补 2 只
+  eq('累计刷满 3 只', wm.spawnedInWave, 3)
+
+  const wm2 = new WaveManager(
+    [{ type: 'normal', count: 10, baseHp: 60, interval: 0.1 }],
+    { prepTime: 0.1, waveInterval: 1 })
+  eq('dt 极大时一次补足全部（不丢怪）', wm2.update(100).spawns.length, 10)
+
+  const wm3 = new WaveManager(waves, { prepTime: 0, waveInterval: 0 })
+  let guard = 0
+  while (!wm3.isDone && guard++ < 500) wm3.update(0.5)
+  ok('走完全部波次进入 DONE', wm3.isDone, 'phase=' + wm3.phase)
+  eq('最后停在波 2', wm3.wave, 2)
+
+  ok('空波次表直接 DONE', new WaveManager([], {}).isDone)
+}
+
+// ─────────── towers 数值表 ───────────
+lines.push('towers · 数值表完整性')
+{
+  eq('共 6 种塔（spec §1 约束 7）', TOWER_ORDER.length, 6)
+  ok('TOWER_ORDER 与 TOWERS 键一一对应',
+     TOWER_ORDER.every(id => TOWERS[id]) && Object.keys(TOWERS).length === 6)
+
+  for (const id of TOWER_ORDER) {
+    const def = towerDef(id)
+    eq(`${id} 恰好 ${MAX_LEVEL} 级`, def.levels.length, MAX_LEVEL)
+    ok(`${id} Lv3 有质变 perk（不能只是数值放大）`, !!def.levels[2].perk,
+       'perk=' + def.levels[2].perk)
+    ok(`${id} 造价逐级递增`,
+       def.levels[0].cost < def.levels[1].cost && def.levels[1].cost < def.levels[2].cost)
+    ok(`${id} 伤害逐级递增`,
+       def.levels[0].damage < def.levels[1].damage && def.levels[1].damage < def.levels[2].damage)
+  }
+
+  eq('累计投入 Lv1 = 造价', totalInvested('arrow', 1), 50)
+  eq('累计投入 Lv3 = 50+60+120', totalInvested('arrow', 3), 230)
+  eq('升级费 Lv1→Lv2', upgradeCost('arrow', 1), 60)
+  ok('满级后无升级费', upgradeCost('arrow', 3) === null)
+
+  let threw = false
+  try { towerDef('nope') } catch { threw = true }
+  ok('未知塔类型抛错（不静默兜底）', threw)
+
+  // 定位覆盖（spec §4.1：每种塔要有明确克制对象，否则 6 种只是数值差异）
+  ok('狙击射程最远', towerDef('sniper').levels[0].range > towerDef('arrow').levels[0].range)
+  ok('炮塔有溅射', towerDef('cannon').levels[0].splash > 0)
+  ok('冰塔有减速', towerDef('ice').levels[0].slow > 0)
+  ok('冰塔 Lv3 有定身', towerDef('ice').levels[2].freeze > 0)
+  ok('电塔有连锁', towerDef('tesla').levels[0].chain > 1)
+  ok('毒塔无视护甲', towerDef('poison').levels[0].ignoreArmor === true)
+  ok('箭塔 Lv3 穿透 2', towerDef('arrow').levels[2].pierce === 2)
+  ok('狙击 Lv3 破甲', towerDef('sniper').levels[2].ignoreArmor === true)
+}
+
+// ─────────── Combat 伤害分配 ───────────
+lines.push('Combat · 伤害分配')
+{
+  const mk = (id, gx, gy, pathDist, hp = 100) =>
+    ({ id, gx, gy, pathDist, hp, maxHp: hp, armor: 0, alive: true })
+  const tower = { gx: 0, gy: 0, range: 5, damage: 10 }
+
+  const t1 = mk('t1', 1, 0, 5)
+  let table = allocateDamage(
+    { tower, target: t1, damage: 10, splash: 0, chain: 0, pierce: 0, chainFalloff: 1 }, [t1])
+  eq('单目标只命中 1 个', table.length, 1)
+  eq('伤害等于开火伤害', table[0].damage, 10)
+
+  // 溅射
+  const near = mk('near', 1.5, 0, 4)     // 距主目标 0.5 格
+  const far = mk('far', 4, 0, 3)         // 距主目标 3 格
+  table = allocateDamage(
+    { tower, target: t1, damage: 20, splash: 1.0, chain: 0, pierce: 0, chainFalloff: 1 },
+    [t1, near, far])
+  eq('溅射命中主目标 + 1 邻居', table.length, 2)
+  const nearHit = table.find(x => x.enemy.id === 'near')
+  ok(`溅射伤害打 ${SPLASH_RATIO} 折`,
+     Math.abs(nearHit.damage - 20 * SPLASH_RATIO) < 1e-9, 'got ' + nearHit.damage)
+  ok('溅射不波及范围外', !table.some(x => x.enemy.id === 'far'))
+
+  // 连锁
+  const c1 = mk('c1', 1, 0, 5)
+  const c2 = mk('c2', 2, 0, 4)
+  const c3 = mk('c3', 3, 0, 3)
+  const c4 = mk('c4', 4, 0, 2)
+  table = allocateDamage(
+    { tower, target: c1, damage: 10, splash: 0, chain: 3, pierce: 0, chainFalloff: 0.5 },
+    [c1, c2, c3, c4])
+  eq('连锁 3 命中 3 个目标', table.length, 3)
+  eq('第一跳不衰减', table[0].damage, 10)
+  ok('第二跳衰减 50%', Math.abs(table[1].damage - 5) < 1e-9, 'got ' + table[1].damage)
+  ok('第三跳继续衰减', Math.abs(table[2].damage - 2.5) < 1e-9, 'got ' + table[2].damage)
+
+  const farAway = mk('faraway', 100, 100, 1)
+  table = allocateDamage(
+    { tower, target: c1, damage: 10, splash: 0, chain: 5, pierce: 0, chainFalloff: 1 },
+    [c1, farAway])
+  eq('连锁不会跳到塔射程之外', table.length, 1)
+
+  // 穿透：优先沿路径走得更远的
+  const p1 = mk('p1', 1, 0, 5)
+  const p2 = mk('p2', 2, 0, 8)
+  const p3 = mk('p3', 3, 0, 3)
+  table = allocateDamage(
+    { tower, target: p1, damage: 10, splash: 0, chain: 0, pierce: 2, chainFalloff: 1 },
+    [p1, p2, p3])
+  eq('穿透命中 2 个', table.length, 2)
+  ok('穿透优先选走得最远的', table.some(x => x.enemy.id === 'p2'))
+
+  // 死亡单位
+  const dead = mk('dead', 1.2, 0, 5, 0)
+  dead.alive = false
+  table = allocateDamage(
+    { tower, target: t1, damage: 10, splash: 3, chain: 0, pierce: 0, chainFalloff: 1 },
+    [t1, dead])
+  ok('死亡单位不再被溅射命中', !table.some(x => x.enemy.id === 'dead'))
+}
+
+// ─────────── Combat 伤害结算 ───────────
+lines.push('Combat · 伤害结算')
+{
+  const mk = (hp, armor = 0) => ({ hp, maxHp: hp, armor, alive: true })
+
+  let e = mk(100, 0)
+  ok('普通扣血', applyDamage(e, 30) === false && e.hp === 70)
+
+  e = mk(100, 8)
+  applyDamage(e, 30)
+  eq('护甲减免（30−8=22）', e.hp, 78)
+
+  e = mk(100, 50)
+  applyDamage(e, 10)
+  eq('伤害低于护甲时保底 1 点（不得完全免疫）', e.hp, 99)
+
+  e = mk(100, 50)
+  applyDamage(e, 10, true)
+  eq('无视护甲时全额生效', e.hp, 90)
+
+  e = mk(20, 0)
+  ok('击杀返回 true', applyDamage(e, 20) === true)
+  ok('击杀后 hp=0 且 alive=false', e.hp === 0 && e.alive === false)
+  ok('已死目标不再受伤', applyDamage(e, 10) === false)
+}
+
+// ─────────── enemies 数值表 ───────────
+lines.push('enemies · 数值表')
+{
+  eq('4 种敌人（3 种 + 精英变体）', ENEMY_ORDER.length, 4)
+  eq('normal 基准速度 1.2 格/秒', enemyDef('normal').speed, 1.2)
+  ok('fast = 1.8× 基准', Math.abs(enemyDef('fast').speed - 1.2 * 1.8) < 1e-9,
+     'speed=' + enemyDef('fast').speed)
+  ok('tank = 0.6× 基准', Math.abs(enemyDef('tank').speed - 1.2 * 0.6) < 1e-9,
+     'speed=' + enemyDef('tank').speed)
+
+  ok('坦克有护甲（毒塔/狙击 Lv3 的定位依据）', enemyDef('tank').armor > 0,
+     'armor=' + enemyDef('tank').armor)
+  eq('精英漏掉扣 3 点生命', enemyDef('elite').leakDamage, 3)
+  eq('普通漏掉扣 1 点生命', enemyDef('normal').leakDamage, 1)
+  ok('精英 HP 最高', ENEMY_ORDER.every(id => enemyDef(id).hp <= enemyDef('elite').hp))
+  eq('HP 波次公式与 WaveManager 一致（波3）',
+     enemyHpAtWave('normal', 3), Math.round(60 * (1 + 0.18 * 2)))
+
+  let threw = false
+  try { enemyDef('nope') } catch { threw = true }
+  ok('未知敌人类型抛错', threw)
+}
+
+// ─────────── level-02 ───────────
+lines.push('level-02 · 第二张地图')
+{
+  eq('12 波（spec §4.3）', level02.waves.length, 12)
+  eq('末波为精英', level02.waves[11].type, 'elite')
+  eq('prepTime = 15s（spec §6.5）', level02.prepTime, 15)
+
+  const g2 = buildGrid(level02)
+  eq('格表 5 行', g2.length, ROWS)
+  ok('可建塔位 ≥ 20', buildableCount(g2) >= 20, 'buildable=' + buildableCount(g2))
+  ok('路径与地图 1 不同（不是复制粘贴）',
+     JSON.stringify(level02.path) !== JSON.stringify(level01.path))
+
+  for (const w of level02.waves) {
+    let okType = true
+    try { enemyDef(w.type) } catch { okType = false }
+    ok(`波次类型合法：${w.type} ×${w.count}`, okType)
+  }
+}
+
+// ─────────── Save 存档 ───────────
+lines.push('Save · 存档（版本 · 降级 · 战绩）')
+{
+  Save.clear()
+
+  const e0 = Save.load()
+  eq('空存档版本号', e0.version, Save.SAVE_VERSION)
+  eq('空存档 cleared 为空', e0.cleared.length, 0)
+  eq('空存档 best.score 为 0', e0.best.score, 0)
+
+  const d1 = Save.markCleared('level-01', { score: 1234, wave: 8 })
+  ok('markCleared 记录通关', d1.cleared.includes('level-01'))
+  eq('markCleared 刷新 best', Save.load().best.score, 1234)
+  ok('isCleared → true', Save.isCleared('level-01'))
+  ok('未通关的 → false', !Save.isCleared('level-02'))
+
+  Save.markCleared('level-02', { score: 10, wave: 1 })
+  eq('低分不覆盖高分', Save.load().best.score, 1234)
+
+  Save.markFailed({ score: 9999, wave: 5, levelId: 'level-01' })
+  eq('markFailed 也刷新 best', Save.load().best.score, 9999)
+  ok('markFailed 不记 cleared', !Save.isCleared('level-99'))
+
+  Save.saveProgress({ levelId: 'level-01', wave: 3 })
+  eq('进度已写入', Save.load().progress.wave, 3)
+  Save.clearProgress()
+  ok('进度已清空', Save.load().progress === null)
+
+  // 损坏数据必须降级而不是抛错（spec §3.8）
+  try {
+    localStorage.setItem('tower-defense-save', '{ 这不是合法 JSON')
+    const d = Save.load()
+    ok('损坏 JSON → 降级为空存档', d.cleared.length === 0 && d.best.score === 0)
+  } catch {
+    ok('损坏 JSON → 降级为空存档', false, '读取时抛错了')
+  }
+
+  // 版本不符必须重置（spec §3.7：不能用错格式读坏数据）
+  try {
+    localStorage.setItem('tower-defense-save', JSON.stringify({ version: 999, cleared: ['x'] }))
+    ok('版本不符 → 重置', Save.load().cleared.length === 0)
+  } catch {
+    ok('版本不符 → 重置', false)
+  }
+
+  Save.clear()
+  ok('可用性探测返回布尔', typeof Save.isAvailable() === 'boolean')
+}
+
+// ─────────── Audio 音效 ───────────
+lines.push('Audio · 合成音效（零素材依赖）')
+{
+  ok('unlock 返回布尔', typeof Audio.unlock() === 'boolean')
+  ok('解锁后 AudioContext 可用', Audio.isAvailable() === true)
+  ok('默认不静音', Audio.isMuted() === false)
+
+  Audio.setMuted(true)
+  ok('可静音', Audio.isMuted() === true)
+  Audio.setMuted(false)
+
+  let threw = false
+  try { for (const k of Object.keys(Audio.SFX)) Audio.SFX[k]() } catch { threw = true }
+  ok(`全部 ${Object.keys(Audio.SFX).length} 个音效调用均不抛错`, !threw)
+}
+
+// ─────────── 汇总 ───────────
+const fails = lines.filter(l => l.startsWith('  ❌')).length
+document.getElementById('out').innerHTML =
+  lines.join('\n') +
+  `\n\n<span class="${fails ? 'fail' : 'pass'} sum">通过 ${pass} · 失败 ${fails}</span>`
+document.title = fails ? `❌ ${fails} 失败` : `✅ 全部通过 (${pass})`
+window.__result = { pass, fails }
+</script>
+</body>
+</html>

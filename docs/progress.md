@@ -1,0 +1,131 @@
+# 进度台账（恢复锚点）
+
+> **用途**：压缩或中断后**唯一的恢复依据**。`$DSH_HOME/AGENTS.md` 的规则每会话重新注入，但"走到哪个阶段、产物在哪、下一步做什么"**不会**自动恢复——不写锚点就等于从头再来。
+>
+> 上游文档：`docs/spec.md`（v1.1，已通过阶段② 四支柱审查 `PASS`）
+> 最后更新：2026-09-14
+
+---
+
+## 当前状态
+
+| Phase | 内容 | 状态 |
+|---|---|---|
+| **0** | 真机验证 `Scale.RESIZE` / X5 内核 | 🟡 **桌面 6 视口通过；真机待用户** |
+| **1** | 骨架 + 部署链路 | 🟡 **骨架通过；GitHub Pages 待用户账号** |
+| **2** | 地图与三朝向布局 | ✅ **代码完成，测试全绿** |
+| 3 | 核心循环（纯逻辑）+ 敌人行走 | ✅ **完成** |
+| 4 | 塔与战斗（6 塔 × 3 级 · 协同 · 卖塔） | ✅ **完成，26 项集成测试全绿** |
+| 5 | UI 与交互（HUD 两套排布 · 建造栏 · 面板 · 补刀 · 自动暂停） | ✅ **完成，33 项 UI 测试全绿** |
+| 6 | 内容与打磨（2 图 · 4 敌 · 引导 · 音效 · 存档 · 结算） | ✅ **完成，29 项集成测试全绿** |
+| 7 | 真机验收取证 | ⬜ **需要用户在真机上跑**（spec §7.2 五条） |
+
+---
+
+## 产物清单
+
+```
+tower-defense/
+├── index.html                  user-scalable=no · 普通 script 引 Phaser + module 引 main.js
+├── .nojekyll                   GitHub Pages 关闭 Jekyll
+├── vendor/phaser.min.js        1,086,308 B = 1061 KB（Phaser 3.90.0 arcade-physics）
+├── src/
+│   ├── main.js                 Scale.RESIZE 配置 + 场景注册
+│   ├── scenes/                 Boot / Menu / LevelSelect / Game / Hud / Result
+│   ├── systems/Layout.js       ★ 三朝向统一布局（纯函数）
+│   ├── systems/MapGrid.js      ★ 关卡展开 + 非法数据报错（纯函数）
+│   └── data/levels/            index.js（注册表）+ level-01.js
+├── scripts/serve.js            本地预览，端口 8788
+├── tests/
+│   ├── check.html              纯逻辑 assert（浏览器可手动打开）
+│   ├── logic-check.mjs         跑 check.html 读结果
+│   ├── smoke-flow.mjs          真实点击走场景链路 + 读 GameScene 布局
+│   ├── headless-check.mjs      6 视口无错误检查
+│   └── screenshot.mjs          三视口 × 三阶段截图
+├── docs/
+│   ├── spec.md                 v1.1
+│   ├── progress.md             本文件
+│   └── screenshots/            9 张截图
+└── probe.html                  Phase 0 探针（真机验证用）
+```
+
+---
+
+## 测试基线（回归用）
+
+```powershell
+cd D:\Users\Danny\Documents\tower-defense
+node scripts\serve.js 8788                       # 后台起服务（ES modules 必须走 HTTP）
+
+node tests\logic-check.mjs                       # 191 项纯逻辑断言
+node tests\combat-flow.mjs                       # 26 项建造/升级/协同/卖塔/击杀
+node tests\ui-flow.mjs                           # 33 项真实点击的 UI 交互
+node tests\phase6-flow.mjs                       # 29 项地图2/胜负/引导/存档/音效解锁
+node tests\smoke-flow.mjs                        # 2 视口场景链路 + 敌人行走
+node tests\headless-check.mjs http://192.168.1.8:8788/index.html   # 6 视口 JS 错误
+node tests\screenshot.mjs                        # 三视口 × 五阶段截图 → docs/screenshots/
+```
+
+> `tests/_nav.mjs` 是共享的场景导航辅助。**不要在任何测试里硬编码点击坐标** ——
+> 见下方「已修正的缺陷」第 6 条。
+
+**当前基线**：**191** 逻辑 · **26** 战斗 · **33** UI · **29** Phase6 · **2** 链路 · **6 视口 0 错误** = **279 项断言全绿**。
+
+---
+
+## 下一步
+
+### 需要用户（阻塞中）
+
+1. **Phase 0 真机验证** —— 手机（尤其微信里）打开：
+   `http://192.168.1.8:8788/probe.html`
+   确认三件事：① 能否打开 ② 点格子是否准 ③ 切后台回来 `visibilitychange` 是否 +1
+   > 桌面无头浏览器**不能替代**这步：iOS 微信与安卓 X5 内核行为未知。
+
+2. **Phase 1 部署** —— 需要 GitHub 账号：`git init` → 建仓库 → 推送 → 开 Pages
+   验收：`https://<user>.github.io/<repo>/` 能打开并进游戏。
+
+### 无需用户（可继续推进）
+
+3. ~~**Phase 3 核心循环**~~ ✅
+4. ~~**Phase 4 塔与战斗**~~ ✅
+5. ~~**Phase 5 UI 与交互**~~ ✅
+6. ~~**Phase 6 内容与打磨**~~ ✅
+7. **素材接入**（可选，不阻塞）：`assets/assets.js` 清单已预留；Kenney 素材需用户下载
+   （我无法访问 kenney.nl）。当前全部为代码绘制占位（纯色圆 / 文字按钮 / 合成音效）。
+8. **Phase 7 真机验收**：**必须由用户在真实设备上完成**，详见「需要用户」一节。
+
+---
+
+## 已知约束与未验证项
+
+| 项 | 状态 |
+|---|---|
+| 320 px 老设备 cell = 39 px | **已接受降级**（spec §6.1）——iPhone SE 一代一类设备占比极低，39 px 仍可点 |
+| 真机（iOS 微信 / 安卓 X5）行为 | **未验证** — 桌面无头不能替代 |
+| 8×5 地图能否撑住 12 波 | 未验证 — 降级余地：放宽到 9×5（45 格） |
+| 满波帧率 ≥30 fps | 未验证 — 验收线已定（spec §7.2） |
+| 6 塔 × 3 级 × 15 协同的平衡 | 长期活动，不在任何 Phase 估时内 |
+| `Scale.RESIZE` 的 `layout()` 复杂度 | 已知代价约 60 行，已由 `systems/Layout.js` 消化 |
+
+---
+
+## 本轮已修正的架构缺陷（勿回退）
+
+1. **`cell` 不得向上 clamp 到 44 px** —— 会让网格总宽溢出窄屏（360 px 屏上 8×44=352 > 344）。
+   44 px 只作**报警线**。已由 `tests/check.html` 的"任何视口都不得溢出"6 项断言保护。
+2. **横屏 HUD 必须用左右浮层** —— 横屏病根是**纵向不足**：812×375 下上下 HUD 会把 cell 压到 36 px，
+   改左右浮层后升到 54.8 px（+51%）。
+3. **不用 `FIT`** —— 竖屏下会把整个画面缩到 0.39 倍，HUD 文字变成 4.7 px。
+4. **`WaveManager` 进入刷怪阶段时不得把 `timer` 清零** —— 那会丢掉 dt 溢出的刷怪额度：
+   dt=100s、间隔 0.1s 时只刷 **1** 只而不是 **10** 只（卡顿帧会丢怪）。
+   正确做法是保留负数 timer 供刷怪循环消耗，刷完当前波后再 clamp 到 0
+   （否则"下一波已迟到很久"会让下一波瞬间全部涌出）。
+   已由 `check.html` 的「dt 极大时一次补足全部（不丢怪）」断言保护。
+5. **塔的造价在 `levels[0].cost`，不是 `def.cost`** —— 曾在 `buildTower` 里误读 `def.cost`
+   得到 `undefined`，使 `canAfford(undefined)` 恒为 false，**建造功能从未工作过**。
+   现统一用 `data/towers.js` 的 `buildCost(id)`，并由 `combat-flow.mjs` 的建造断言保护。
+6. **测试里禁止硬编码点击坐标** —— 曾经 4 个测试脚本都写死 `H * 0.64` 点「开始游戏」。
+   Phase 6 把按钮挪到 `H * 0.60` 后，全部脚本静默点空、卡在菜单，却只报出无关的
+   `Cannot read properties of undefined (reading 'gold')`，排查花了很久。
+   现已改为 `tests/_nav.mjs` 从 **Phaser 交互对象**动态取中心，布局怎么挪都不受影响。

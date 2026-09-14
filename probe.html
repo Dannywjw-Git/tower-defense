@@ -1,0 +1,190 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="format-detection" content="telephone=no">
+<link rel="icon" href="data:,">
+<title>Phase 0 探针 · tower-defense</title>
+<style>
+  html, body {
+    margin: 0; height: 100%; overflow: hidden;
+    background: #0b0b0f; color: #e8e8ea;
+    font: 13px/1.45 -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
+    -webkit-user-select: none; user-select: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+  #title {
+    position: fixed; top: 0; left: 0; width: 100%; box-sizing: border-box;
+    padding: 7px 10px; z-index: 10; font-size: 12px;
+    background: rgba(0, 0, 0, .62);
+  }
+  #hud {
+    position: fixed; left: 0; bottom: 0; width: 100%; box-sizing: border-box;
+    padding: 8px 10px 10px; z-index: 10; white-space: pre;
+    background: rgba(0, 0, 0, .84);
+    font-family: ui-monospace, Menlo, Consolas, monospace; font-size: 12px;
+  }
+  .ok   { color: #5bd75b; }
+  .bad  { color: #ff5c5c; }
+  .warn { color: #ffc44d; }
+</style>
+</head>
+<body>
+<div id="title">Phase 0 探针 — 逐个点格子，看高亮是否落在你手指下的那一格</div>
+<div id="hud">…</div>
+
+<script src="./vendor/phaser.min.js"></script>
+<script>
+// ---------------------------------------------------------------------------
+// Phase 0 目的：在真机（尤其是微信内置浏览器）上验证四个可能推翻架构的假设
+//   1. Scale.RESIZE 下画布是否跟随窗口（转屏、地址栏收起）
+//   2. 竖屏下 8×5 格子的实测边长是否 ≥ 44 CSS px
+//   3. visibilitychange 是否可靠触发（切后台自动暂停的前提）
+//   4. 触摸坐标是否准确（能否点中目标格）
+// 全部通过才继续 Phase 1；任一失败则回退 FIT + DOM HUD 方案。
+// ---------------------------------------------------------------------------
+
+const COLS = 8
+const ROWS = 5
+const HUD_H = 148          // 底部 HUD 占位高度，避免格子被文字盖住
+
+const rows = []
+
+function render() {
+  document.getElementById('hud').innerHTML = rows
+    .map(([k, v, c]) => k.padEnd(15) + ' ' + (c ? '<span class="' + c + '">' + v + '</span>' : v))
+    .join('\n')
+}
+
+function set(key, value, cls) {
+  const i = rows.findIndex(r => r[0] === key)
+  const row = [key, value, cls]
+  if (i >= 0) rows[i] = row
+  else rows.push(row)
+  render()
+}
+
+let visCount = 0
+document.addEventListener('visibilitychange', () => {
+  visCount++
+  set('visibilitychange', visCount + ' 次 · 当前 ' + document.visibilityState, 'ok')
+})
+
+class Probe extends Phaser.Scene {
+  create() {
+    this.g = this.add.graphics()
+    this.sel = null
+
+    set('renderer', this.game.renderer.type === Phaser.WEBGL ? 'WebGL' : 'Canvas',
+        this.game.renderer.type === Phaser.WEBGL ? 'ok' : 'warn')
+
+    this.layout()
+    this.scale.on('resize', () => this.layout())
+    this.input.on('pointerdown', p => this.tap(p))
+  }
+
+  layout() {
+    const W = this.scale.width
+    const H = this.scale.height
+
+    set('canvas', W + '×' + H, W === window.innerWidth ? 'ok' : 'bad')
+    set('window', window.innerWidth + '×' + window.innerHeight)
+    set('dpr', String(window.devicePixelRatio))
+
+    // 横屏的病根是「纵向空间不足」，不是宽度 ——
+    // 实测 812×375：HUD 吃掉上下 194 px 后只剩 181 px ÷ 5 行 = 36 px，不合格。
+    // 所以横屏时 HUD 改为左右浮层，把纵向空间全让给地图。
+    const landscape = W > H
+    let availW, availH
+
+    if (landscape) {
+      this.sideW = Math.min(200, W * 0.22)
+      availW = W - this.sideW * 2 - 16
+      availH = H - 32
+    } else {
+      this.sideW = 0
+      availW = W - 8
+      availH = H - HUD_H - 46
+    }
+
+    set('mode', landscape ? '横屏 · HUD 左右浮层' : '竖屏 · HUD 上下固定')
+
+    // 格子 = 可用空间 ÷ 格数 —— 不向上 clamp！
+    // 向上 clamp 会让格子总宽超出屏幕（窄屏溢出），并不能换来可点性。
+    // 44 px 是手指可靠点击的参考线，只用于着色报警，不用于强制放大。
+    this.cell = Math.min(availW / COLS, availH / ROWS)
+
+    const gw = this.cell * COLS
+    const gh = this.cell * ROWS
+    this.ox = (W - gw) / 2
+    this.oy = landscape ? (H - gh) / 2 : 38 + Math.max(0, (availH - gh) / 2)
+
+    set('cell', this.cell.toFixed(1) + ' px',
+        this.cell >= 44 ? 'ok' : this.cell >= 40 ? 'warn' : 'bad')
+    set('grid', gw.toFixed(0) + '×' + gh.toFixed(0))
+    set('lastTap', '点一下格子', 'warn')
+    this.draw()
+  }
+
+  draw() {
+    this.g.clear()
+
+    // 横屏时画出左右 HUD 浮层占位，用于目视确认它们不压住地图
+    if (this.sideW) {
+      this.g.fillStyle(0x000000, .6)
+      this.g.fillRect(0, 0, this.sideW, this.scale.height)
+      this.g.fillRect(this.scale.width - this.sideW, 0, this.sideW, this.scale.height)
+    }
+
+    this.g.fillStyle(0x16212c, 1)
+      .fillRect(this.ox, this.oy, this.cell * COLS, this.cell * ROWS)
+
+    for (let y = 0; y < ROWS; y++) {
+      for (let x = 0; x < COLS; x++) {
+        const px = this.ox + x * this.cell
+        const py = this.oy + y * this.cell
+        if (this.sel && this.sel[0] === x && this.sel[1] === y) {
+          this.g.fillStyle(0x2ecc71, .55)
+            .fillRect(px + 2, py + 2, this.cell - 4, this.cell - 4)
+        }
+        this.g.lineStyle(1, 0x35506b, 1).strokeRect(px, py, this.cell, this.cell)
+      }
+    }
+  }
+
+  tap(p) {
+    const x = Math.floor((p.x - this.ox) / this.cell)
+    const y = Math.floor((p.y - this.oy) / this.cell)
+    const hit = x >= 0 && x < COLS && y >= 0 && y < ROWS
+
+    if (hit) this.sel = [x, y]
+
+    set('lastTap',
+      hit ? '格(' + x + ',' + y + ') raw=(' + (p.x | 0) + ',' + (p.y | 0) + ')'
+          : '格外 raw=(' + (p.x | 0) + ',' + (p.y | 0) + ')',
+      hit ? 'ok' : 'warn')
+
+    this.draw()
+  }
+}
+
+new Phaser.Game({
+  type: Phaser.AUTO,
+  scale: {
+    mode: Phaser.Scale.RESIZE,
+    autoCenter: Phaser.Scale.NO_CENTER,
+    width: '100%',
+    height: '100%',
+  },
+  backgroundColor: '#0b0b0f',
+  scene: [Probe],
+})
+
+set('renderer', '…')
+set('visibilitychange', '尚未触发', 'warn')
+</script>
+</body>
+</html>
