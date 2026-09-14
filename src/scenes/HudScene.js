@@ -167,12 +167,18 @@ export default class HudScene extends Phaser.Scene {
       this.speedBtn.setPosition(10, H - 44)
 
       // 右浮层：建造栏竖排 + 取消
+      // ⚠️ 整个栏**垂直居中**，不要从固定的 y=10 开始往下排 ——
+      //    那样在大屏上（1440×900）建造栏会挤在顶部 268px 内、下方 70% 全空。
+      //    实测数据：812×375 尚可，1440×900 明显头重脚轻。
       const btnH = Math.max(30, Math.min(44, (H - 60) / 7))
       const bx = W - side + 14
+      const blockH = 6 * btnH + 8 + this.cancelBtn.height
+      const startY = Math.max(8, (H - blockH) / 2)
+
       this.buildButtons.forEach((b, i) => {
-        b.text.setPosition(bx, 10 + i * btnH)
+        b.text.setPosition(bx, startY + i * btnH)
       })
-      this.cancelBtn.setPosition(bx, 10 + 6 * btnH + 8)
+      this.cancelBtn.setPosition(bx, startY + 6 * btnH + 8)
 
       this.layoutPanel(W, H, landscape, side)
     } else {
@@ -182,17 +188,19 @@ export default class HudScene extends Phaser.Scene {
       this.pauseBtn.setPosition(W - 74, 10)
       this.speedBtn.setPosition(W - 42, 10)
 
-      // 底部建造栏 3×2
+      // 底部建造栏 3×2 —— 从屏幕底边往上排（不是从固定 baseY 往下摆），
+      // 这样无论在 320×568 的小屏还是 430×932 的大屏，栏都稳稳贴住底边。
       const cols = 3
       const bw = Math.min(64, (W - 32) / cols)
       const bh = 40
-      const baseY = H - 128
+      const gap = 6
+      const baseY = H - 12 - (2 * bh + gap)          // 两行 + 行间距 + 底边距
       this.buildButtons.forEach((b, i) => {
         const cx = i % cols
         const cy = Math.floor(i / cols)
-        b.text.setPosition(12 + cx * (bw + 6), baseY + cy * (bh + 6))
+        b.text.setPosition(12 + cx * (bw + gap), baseY + cy * (bh + gap))
       })
-      this.cancelBtn.setPosition(12 + 2 * (bw + 6) + bw + 6, baseY + bh + 6)
+      this.cancelBtn.setPosition(12 + 2 * (bw + gap) + bw + gap, baseY + bh + gap)
 
       this.layoutPanel(W, H, landscape, 0)
     }
@@ -201,9 +209,38 @@ export default class HudScene extends Phaser.Scene {
   }
 
   layoutPanel(W, H, landscape, side) {
-    const pw = landscape ? side - 20 : Math.min(W - 24, 300)
-    const px = landscape ? 10 : (W - pw) / 2
-    const py = landscape ? 100 : H - 200
+    const gs = this.gs
+    const L = gs && gs.L
+
+    let pw, px, py
+
+    if (landscape) {
+      // 横屏：左侧浮层（地图水平居中，两侧本就是留白）
+      pw = Math.max(150, side - 20)
+      px = 10
+      py = 96
+    } else {
+      // 竖屏：面板放在**地图正下方**。
+      // 地图是 8×5（宽高比 1.6）而手机竖屏是 0.46 —— 地图下方**必然**留出大片空白，
+      // 面板正好填在那里，既利用空间又不与任何控件冲突。
+      //
+      // ⚠️ 曾经写死 `py = H - 200`，结果面板底部压住了底部建造栏的**上排三个塔按钮**
+      //    （箭/炮/冰），玩家根本点不到它们。
+      //    所有自动化测试依然全绿 —— 因为它们用程序坐标点按钮，
+      //    程序算的是按钮的理论位置，根本不知道有东西盖在上面。**看图才发现。**
+      //
+      // ⚠️ 但在 320×568 这类小屏上，地图下方只剩约 100px，放不下 96px 的面板 + 间距，
+      //    仍会压到建造栏（visual-flow 抓到过：面板 y347–443 vs 栏 y440–524）。
+      //    所以这里取「地图下方」与「建造栏上方」两者的较小值，保证永不重叠。
+      pw = Math.min(W - 24, 320)
+      px = (W - pw) / 2
+
+      const belowGrid = L ? (L.originY + L.gridH + 12) : (H * 0.5)
+      const barTop = H - 12 - (2 * 40 + 6) - 10       // 建造栏上沿再留 10px
+      const panelH = 96
+      py = Math.min(belowGrid, barTop - panelH)
+      py = Math.max(56, py)                            // 至少不撞顶部状态条
+    }
 
     this.panelBg.setPosition(px, py).setSize(pw, 96)
     this.panelText.setPosition(px + 10, py + 8)

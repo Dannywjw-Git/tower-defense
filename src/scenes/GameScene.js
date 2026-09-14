@@ -72,6 +72,11 @@ export default class GameScene extends Phaser.Scene {
     this.stats = { kills: 0, leaked: 0, built: 0, sold: 0, taps: 0, startedAt: Date.now() }
     this.finished = false
 
+    // URL 加 ?debug=1 才显示调试信息（底部提示条 + HUD 右上角面板）
+    this.debugOn = (() => {
+      try { return new URLSearchParams(location.search).has('debug') } catch { return false }
+    })()
+
     // ── 渲染层 ──
     this.g = this.add.graphics().setDepth(0)
     this.hint = this.add.text(0, 0, '', { fontSize: '12px', color: '#4a5f73', align: 'center' })
@@ -175,14 +180,26 @@ export default class GameScene extends Phaser.Scene {
   }
 
   updateHint() {
-    if (!this.hint || !this.L) return
+    if (!this.hint) return
+
+    // ⚠️ 这条提示**只在 ?debug=1 时显示**。
+    //    它原本一直挂着，而显示的金币/生命/波次与顶部 HUD **完全重复**，
+    //    只在末尾多了个 cell 尺寸 —— 结果屏幕底部多了一条冗余信息条。
+    //    这是**看图**才发现的：所有测试全绿，因为没人断言"屏幕上不该有这条"。
+    if (!this.debugOn) {
+      this.hint.setVisible(false)
+      return
+    }
+    if (!this.L) return
+
     const s = this.getState()
     const next = this.wm.isDone ? '波次结束'
       : this.wm.phase === 'prep' ? `下一波 ${this.wm.countdown.toFixed(0)}s`
         : `第 ${s.wave}/${s.totalWaves} 波`
-    this.hint.setText(
-      `💰${s.gold} ❤️${s.lives} · ${next} · 塔${s.towers} 怪${s.enemies} · cell ${this.L.cell.toFixed(0)}px`)
-    this.hint.setPosition(this.scale.width / 2, this.scale.height - 16)
+    this.hint.setVisible(true).setText(
+      `cell ${this.L.cell.toFixed(1)}px · ${this.L.landscape ? '横屏' : '竖屏'} · ${next} · ` +
+      `塔${s.towers} 怪${s.enemies} · 池 ${s.pools.enemy}/${s.pools.tower}/${s.pools.proj}`)
+    this.hint.setPosition(this.scale.width / 2, this.scale.height - 10)
   }
 
   /** 供 HUD 与无头测试读取 */
@@ -597,8 +614,11 @@ export default class GameScene extends Phaser.Scene {
 
     const cur = this.tutorial[0]
     if (cur) {
+      // 贴着地图**上沿**显示 —— 曾经写死 `height * 0.12`，
+      // 结果提示飘在地图上方几百像素的空白里，与它要教的地图完全脱节（看图才发现）
+      const y = this.L ? Math.max(56, this.L.originY - 28) : this.scale.height * 0.1
       this.tutorialText.setText(cur.text).setVisible(true)
-        .setPosition(this.scale.width / 2, this.scale.height * 0.12)
+        .setPosition(this.scale.width / 2, y)
     } else {
       this.tutorialText.setVisible(false)
     }

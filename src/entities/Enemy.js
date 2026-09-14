@@ -40,6 +40,23 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.freezeTimer = 0
     this.poisonDps = 0
     this.poisonTimer = 0
+
+    // ── 血条：底 + 前景，共两个矩形 ──
+    //
+    // 为什么需要它：spec §5.2 的「点击补刀」是"对点中的敌人造成 2% 最大 HP" ——
+    // **没有血条，玩家根本无法判断该点哪只**（这也是 spec 阶段① 遗漏的要素）。
+    //
+    // 实现要点：
+    //   · 与本体一样**随对象池复用**，不额外 new/destroy
+    //   · 前景 originX=0，缩短时从右边减少（符合直觉）
+    //   · 只在 hp 变化时改宽度与颜色，避免每帧 30×2 次无谓的属性写入
+    this.hpBg = scene.add.rectangle(-100, -100, 20, 3, 0x000000, 0.55)
+      .setDepth(4).setVisible(false)
+    this.hpFill = scene.add.rectangle(-100, -100, 20, 3, 0x4ade80, 1)
+      .setDepth(5).setVisible(false).setOrigin(0, 0.5)
+
+    this._lastHp = -1
+    this._barW = 20
   }
 
   /** 从对象池取出并初始化。cfg: { type, hp, speed, armor, bounty } */
@@ -62,6 +79,9 @@ export class Enemy extends Phaser.GameObjects.Arc {
 
     this.setFillStyle(COLORS[this.type] ?? COLORS.normal)
     this.setVisible(true)
+    this._lastHp = -1                 // 强制下一帧刷新血条
+    this.hpBg.setVisible(true)
+    this.hpFill.setVisible(true)
     return this
   }
 
@@ -133,7 +153,26 @@ export class Enemy extends Phaser.GameObjects.Arc {
 
     const px = cellToPixel(layout, p.x, p.y)
     this.setPosition(px.x, px.y)
-    this.setRadius(Math.max(3, layout.cell * 0.16))
+    const r = Math.max(3, layout.cell * 0.16)
+    this.setRadius(r)
+
+    // ── 血条跟随 ──
+    const barW = Math.max(14, layout.cell * 0.52)
+    const barH = Math.max(2, layout.cell * 0.055)
+    const by = px.y - r - barH - 2           // 贴在头顶上方
+    this._barW = barW
+
+    this.hpBg.setPosition(px.x, by).setSize(barW, barH)
+
+    // 只在 hp 真变了时才写入（每帧 30 只怪 × 2 个属性写入是白费）
+    if (this.hp !== this._lastHp) {
+      this._lastHp = this.hp
+      const ratio = this.maxHp > 0 ? Math.max(0, Math.min(1, this.hp / this.maxHp)) : 0
+      const color = ratio > 0.5 ? 0x4ade80 : (ratio > 0.25 ? 0xffd166 : 0xff5c5c)
+      this.hpFill.setSize(barW * ratio, barH).setFillStyle(color, 1)
+    }
+    // 位置每帧都要跟（敌人一直在动）
+    this.hpFill.setPosition(px.x - barW / 2, by)
   }
 
   /** 受伤；返回是否本次击杀 */
@@ -161,5 +200,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.poisonTimer = 0
     this.setVisible(false)
     this.setPosition(-100, -100)
+    this.hpBg.setVisible(false).setPosition(-100, -100)
+    this.hpFill.setVisible(false).setPosition(-100, -100)
   }
 }

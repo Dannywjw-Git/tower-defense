@@ -5,17 +5,22 @@
 //
 // 协同（spec §5.1）由 GameScene 在建造 / 升级 / 卖出后重算，并**缓存**在
 // `synergy` 上 —— 不在每帧遍历邻域。
+//
+// 视觉：塔是**正方形**，敌人是**圆形**（见 Enemy.js）。
+//   ⚠️ 起初两者都是纯色圆，结果**玩家分不清哪个是塔哪个是怪**，
+//   而且毒塔的紫色与坦克敌人的紫色直接撞车。
+//   形状差异不需要图例就能分辨，是最省成本的修法（看图才发现的问题）。
 
 import { towerDef, levelStats } from '../data/towers.js'
 import { pickTarget, STRATEGY } from '../systems/Targeting.js'
 import { cellToPixel } from '../systems/Layout.js'
 
-export class Tower extends Phaser.GameObjects.Arc {
+export class Tower extends Phaser.GameObjects.Rectangle {
   constructor(scene) {
-    super(scene, -100, -100, 12, 0, 360, false, 0x4ade80)
+    super(scene, -100, -100, 12, 12, 0x4ade80)
     scene.add.existing(this)
     this.setVisible(false)
-    this.setStrokeStyle(2, 0x0b0b0f, 0.8)
+    this.setStrokeStyle(2, 0x0b0b0f, 0.9)
     this.synergy = { stacks: 0, damageMult: 1, specials: [] }
   }
 
@@ -89,7 +94,9 @@ export class Tower extends Phaser.GameObjects.Arc {
   syncPixel(layout) {
     const px = cellToPixel(layout, this.cx, this.cy)
     this.setPosition(px.x, px.y)
-    this.setRadius(Math.max(5, layout.cell * (0.20 + this.level * 0.035)))
+    // Rectangle 用边长（不是半径）。等级越高方块越大 —— 与原先的圆直径相当。
+    const side = Math.max(8, layout.cell * (0.42 + this.level * 0.065))
+    this.setSize(side, side)
     this.setDepth(2)
   }
 
