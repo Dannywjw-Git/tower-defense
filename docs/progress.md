@@ -18,7 +18,7 @@
 | 4 | 塔与战斗（6 塔 × 3 级 · 协同 · 卖塔） | ✅ **完成，26 项集成测试全绿** |
 | 5 | UI 与交互（HUD 两套排布 · 建造栏 · 面板 · 补刀 · 自动暂停） | ✅ **完成，33 项 UI 测试全绿** |
 | 6 | 内容与打磨（2 图 · 4 敌 · 引导 · 音效 · 存档 · 结算） | ✅ **完成，29 项集成测试全绿** |
-| 7 | 真机验收取证 | ⬜ **需要用户在真机上跑**（spec §7.2 五条） |
+| 7 | 真机验收取证 | 🟡 自动化部分已完成（见下）；**五条硬标准仍需真机** |
 
 ---
 
@@ -37,16 +37,28 @@ tower-defense/
 │   └── data/levels/            index.js（注册表）+ level-01.js
 ├── scripts/serve.js            本地预览，端口 8788
 ├── tests/
+│   ├── _nav.mjs                ★ 场景导航辅助（禁止硬编码点击坐标）
 │   ├── check.html              纯逻辑 assert（浏览器可手动打开）
-│   ├── logic-check.mjs         跑 check.html 读结果
-│   ├── smoke-flow.mjs          真实点击走场景链路 + 读 GameScene 布局
+│   ├── logic-check.mjs         191 项纯逻辑
+│   ├── combat-flow.mjs         26 项建造/升级/协同/卖塔/击杀
+│   ├── ui-flow.mjs             33 项真实点击 UI 交互
+│   ├── phase6-flow.mjs         29 项地图2/胜负/引导/存档/音效
+│   ├── smoke-flow.mjs          场景链路 + 敌人行走
 │   ├── headless-check.mjs      6 视口无错误检查
-│   └── screenshot.mjs          三视口 × 三阶段截图
+│   ├── perf-check.mjs          ★ 体积/首屏/帧率测量
+│   └── screenshot.mjs          三视口 × 五阶段截图
+├── assets/
+│   └── assets.js               ★ 素材清单（当前为空 = 全部代码占位）
+├── scripts/serve.js            本地预览，端口 8788
 ├── docs/
 │   ├── spec.md                 v1.1
 │   ├── progress.md             本文件
-│   └── screenshots/            9 张截图
-└── probe.html                  Phase 0 探针（真机验证用）
+│   ├── DEPLOY.md               ★ GitHub Pages 部署步骤
+│   ├── ACCEPTANCE.md           ★ 真机验收清单（Phase 7）
+│   └── screenshots/            15 张截图
+├── probe.html                  Phase 0 探针（真机验证用）
+├── .nojekyll / .gitignore / .gitattributes
+└── git 仓库已初始化（2 个提交，main 分支）
 ```
 
 ---
@@ -70,6 +82,38 @@ node tests\screenshot.mjs                        # 三视口 × 五阶段截图 
 > 见下方「已修正的缺陷」第 6 条。
 
 **当前基线**：**191** 逻辑 · **26** 战斗 · **33** UI · **29** Phase6 · **2** 链路 · **6 视口 0 错误** = **279 项断言全绿**。
+
+---
+
+## Phase 7 自动化部分的结果（真实测量）
+
+用 `node tests/perf-check.mjs` 测量（无头浏览器 + CDP 的 CPU/网络节流）。
+
+### 部署产物体积 —— **可靠数据**
+
+| 项 | 值 |
+|---|---|
+| 原始 | **1147 KB** |
+| **传输（gzip 后）** | **319 KB** ← 朋友实际要下载的量 |
+| 其中引擎 | 1061 KB 原始 / 279 KB 传输（Phaser 3.90.0） |
+| 游戏代码合计 | 约 86 KB 原始 / 40 KB 传输 |
+
+### 首屏（到「开始游戏」可交互）
+
+| 场景 | 耗时 | 判定 |
+|---|---|---|
+| 桌面 · 无节流 | 831 ms | ✅ |
+| 4× CPU 节流（近似中端机） | 900 ms | ✅ |
+| **4G + 4× 节流** | **3742 ms** | ✅ **≤5s（最接近真机的场景）** |
+| 3G + 4× 节流 | 8334 ms | ❌ 朋友用 3G 时会超 |
+
+> 真实部署在 GitHub Pages（**HTTP/2**）会比本测试更快 —— 本地预览是 node http/1.1，
+> 30+ 个 ES module 请求没有多路复用。这是"无构建 + 原生 ESM"的代价，HTTP/2 可缓解。
+
+### 帧率 —— **不可作为验收依据**
+
+所有场景（含空转）都稳定在 **32 fps** —— 因为 **headless Chromium 无显示器时
+rAF 被节流**。它只能说明"逻辑没把主线程堵死"，**不能判定 ≥30fps**。必须在真机测。
 
 ---
 
