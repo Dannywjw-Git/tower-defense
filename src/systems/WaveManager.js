@@ -112,10 +112,3 @@ export class WaveManager {
     return { spawns, startedWave, allSpawned: this.phase === PHASE.DONE }
   }
 }
-
-/** 只推进计时器、不生成任何敌人的测试辅助：拿到下一波还需多少秒 */
-export function secondsUntilWave(wm) {
-  if (wm.phase === PHASE.DONE) return Infinity
-  if (wm.phase === PHASE.SPAWNING) return 0
-  return Math.max(0, wm.timer)
-}

@@ -63,10 +63,3 @@ export function positionAt(path, dist) {
   // 理论不可达，保险起见返回终点
   return { x: last.x1, y: last.y1, done: true }
 }
-
-/**
- * 路径长度（格数）—— 敌人以 speed（格/秒）行进，走完需要 total/speed 秒。
- */
-export function pathLength(path) {
-  return path.total
-}

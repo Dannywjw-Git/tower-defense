@@ -56,6 +56,7 @@ tower-defense/
 │   ├── progress.md             本文件
 │   ├── DEPLOY.md               ★ GitHub Pages 部署步骤
 │   ├── ACCEPTANCE.md           ★ 真机验收清单（Phase 7）
+│   ├── SPEC-COVERAGE.md        ★ spec 逐条覆盖对照表
 │   └── screenshots/            15 张截图
 ├── probe.html                  Phase 0 探针（真机验证用）
 ├── .nojekyll / .gitignore / .gitattributes
@@ -159,6 +160,36 @@ rAF 被节流**。它只能说明"逻辑没把主线程堵死"，**不能判定 
 7. **素材接入**（可选，不阻塞）：`assets/assets.js` 清单已预留；Kenney 素材需用户下载
    （我无法访问 kenney.nl）。当前全部为代码绘制占位（纯色圆 / 文字按钮 / 合成音效）。
 8. **Phase 7 真机验收**：**必须由用户在真实设备上完成**，详见「需要用户」一节。
+
+---
+
+## Phase 8 代码审查（ponytail-review 精神：YAGNI / 删优于增）
+
+**删除的死代码与投机性 API**：
+
+| 项 | 类型 |
+|---|---|
+| `PathMath.pathLength` | 死代码（零消费者） |
+| `Targeting.enemiesInRange` | 死代码（注释写"供 UI 复用"，但从未被调用） |
+| `levels/index.levelById` | 死代码 |
+| `WaveManager.secondsUntilWave` | 死代码 |
+| `Projectile.recycle` | 死代码 |
+| `enemies.enemyHpAtWave` | **重复实现** —— 复制了 `WaveManager.hpForWave` 的公式 |
+| `assets.js` 的 `hasAssets` / `assetCount` / `towerTexture` / `enemyTexture` | **投机性 API** —— 为尚未接入的素材预留 |
+| `GameScene` 的未使用 import `towerDef` | 残留（Phase 4 改用 `buildCost` 后忘了删） |
+| `check.html` 的未使用 import `BLOCKED` / `ENEMIES` | 残留 |
+
+删除后回归：**290 项断言全绿**（逻辑项 191→190，因为删掉了那条重复公式的断言）。
+
+**抽查关键常量与 spec 一致**：`HP_GROWTH_PER_WAVE=0.18` · `PER_NEIGHBOR=0.05` · `MAX_STACKS=4` ·
+`SELL_REFUND_RATE=0.7` · `TAP_COOLDOWN_MS=250` · `TAP_DAMAGE_RATIO=0.02` · `TAP_MAX_DAMAGE=20` ·
+`prepTime=15` · `startLives=20` · `startGold=120/150`。
+
+**发现并修正的文档偏差**：spec §4.4 只写"起始金币 120"、未区分关卡，而地图 2 实际用 150。
+已在 spec 中补上说明。
+
+**产出 `docs/SPEC-COVERAGE.md`**：spec 逐条 → 实现位置 → 状态，证明无遗漏；
+并列出 5 项已知偏差（素材未接入 / 真机未验收 / 帧率不可自动测 / 金币基线 / 3G 首屏）。
 
 ---
 

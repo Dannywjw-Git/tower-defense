@@ -48,10 +48,4 @@ export class Projectile extends Phaser.GameObjects.Arc {
     )
     return false
   }
-
-  recycle() {
-    this.active = false
-    this.setVisible(false)
-    this.setPosition(-100, -100)
-  }
 }

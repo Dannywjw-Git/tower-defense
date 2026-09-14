@@ -55,8 +55,3 @@ export function pickTarget(tower, enemies, strategy = STRATEGY.FIRST) {
 
   return best
 }
-
-/** 射程内的全部有效目标（供 UI 高亮 / 溅射判定复用） */
-export function enemiesInRange(tower, enemies) {
-  return enemies.filter(e => e && e.alive !== false && e.hp > 0 && inRange(tower, e))
-}

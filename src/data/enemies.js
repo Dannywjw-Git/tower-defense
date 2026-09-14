@@ -41,8 +41,3 @@ export function enemyDef(id) {
   if (!def) throw new Error(`未知敌人类型: ${id}`)
   return def
 }
-
-/** 按波次线性增长的 HP（与 WaveManager 的公式一致，供 UI 预览用） */
-export function enemyHpAtWave(typeId, wave) {
-  return Math.round(enemyDef(typeId).hp * (1 + 0.18 * (Math.max(1, wave) - 1)))
-}

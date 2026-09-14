@@ -33,29 +33,3 @@ export const ATLASES = [
 export const SFX_FILES = [
   // { key: 'sfx-build', path: './assets/sfx/build.ogg' },
 ]
-
-/** 是否已接入真实素材；false 时全部走代码绘制的占位 */
-export function hasAssets() {
-  return IMAGES.length > 0 || ATLASES.length > 0
-}
-
-/** 素材总条数（供 BootScene 判断要不要显示进度条） */
-export function assetCount() {
-  return IMAGES.length + ATLASES.length + SFX_FILES.length
-}
-
-/**
- * 塔的渲染 key（接入素材后由渲染层使用；当前返回 null 表示走占位）
- * @param {string} typeId 塔类型
- * @param {number} level 等级
- */
-export function towerTexture(typeId, level) {
-  const key = `tower-${typeId}-${level}`
-  return IMAGES.some(i => i.key === key) ? key : null
-}
-
-/** 敌人的渲染 key；null 表示走占位 */
-export function enemyTexture(typeId) {
-  const key = `enemy-${typeId}`
-  return IMAGES.some(i => i.key === key) ? key : null
-}

@@ -11,8 +11,4 @@ export const LEVELS = [
   level02,
 ]
 
-export function levelById(id) {
-  return LEVELS.find(l => l.id === id) || LEVELS[0] || null
-}
-
 export default LEVELS

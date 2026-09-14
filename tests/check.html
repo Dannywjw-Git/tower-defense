@@ -23,7 +23,7 @@
 
 <script type="module">
 import { computeLayout, cellToPixel, pixelToCell, COLS, ROWS } from '../src/systems/Layout.js'
-import { buildGrid, countCells, buildableCount, PATH, BLOCKED } from '../src/systems/MapGrid.js'
+import { buildGrid, countCells, buildableCount, PATH } from '../src/systems/MapGrid.js'
 import { buildPath, positionAt } from '../src/systems/PathMath.js'
 import { Economy, SELL_REFUND_RATE, waveClearBonus } from '../src/systems/Economy.js'
 import { pickTarget, STRATEGY } from '../src/systems/Targeting.js'
@@ -31,7 +31,7 @@ import { computeSynergy, MAX_STACKS } from '../src/systems/Adjacency.js'
 import { WaveManager, hpForWave, PHASE } from '../src/systems/WaveManager.js'
 import { TOWERS, TOWER_ORDER, towerDef, totalInvested, upgradeCost, MAX_LEVEL } from '../src/data/towers.js'
 import { allocateDamage, applyDamage, SPLASH_RATIO } from '../src/systems/Combat.js'
-import { ENEMIES, ENEMY_ORDER, enemyDef, enemyHpAtWave } from '../src/data/enemies.js'
+import { ENEMY_ORDER, enemyDef } from '../src/data/enemies.js'
 import * as Save from '../src/systems/Save.js'
 import * as Audio from '../src/systems/Audio.js'
 import level01 from '../src/data/levels/level-01.js'
@@ -414,8 +414,6 @@ lines.push('enemies · 数值表')
   eq('精英漏掉扣 3 点生命', enemyDef('elite').leakDamage, 3)
   eq('普通漏掉扣 1 点生命', enemyDef('normal').leakDamage, 1)
   ok('精英 HP 最高', ENEMY_ORDER.every(id => enemyDef(id).hp <= enemyDef('elite').hp))
-  eq('HP 波次公式与 WaveManager 一致（波3）',
-     enemyHpAtWave('normal', 3), Math.round(60 * (1 + 0.18 * 2)))
 
   let threw = false
   try { enemyDef('nope') } catch { threw = true }
