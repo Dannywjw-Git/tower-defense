@@ -1,0 +1,22 @@
+# 换行符统一为 LF
+#
+# Windows 上 git 默认 core.autocrlf=true，会在检出时把 LF 换成 CRLF。
+# 对本项目无害（浏览器都认），但会让 diff 充满噪音、也容易在跨平台协作时踩坑。
+# 这里显式钉死：**仓库内一律 LF**。
+* text=auto eol=lf
+
+# 二进制文件不做文本处理
+*.png   binary
+*.jpg   binary
+*.jpeg  binary
+*.gif   binary
+*.webp  binary
+*.ico   binary
+*.woff  binary
+*.woff2 binary
+*.mp3   binary
+*.ogg   binary
+*.wav   binary
+
+# 第三方压缩产物：标记为 vendored，不参与 diff、不计入语言统计
+vendor/*.min.js  -diff linguist-vendored
