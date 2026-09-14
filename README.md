@@ -45,6 +45,7 @@ node tests\combat-flow.mjs       #  26 项建造/升级/协同/卖塔/实战击�
 node tests\ui-flow.mjs           #  38 项真实鼠标点击的 UI 交互
 node tests\phase6-flow.mjs       #  29 项地图2/胜负结算/引导/存档/音效
 node tests\stress-flow.mjs       #  11 项对象池复用与场景泄漏
+node tests\mechanics-flow.mjs    #  17 项机制组合（协同降级/溅射/连锁/减速/毒/集火）
 node tests\smoke-flow.mjs        #     场景链路 + 敌人行走
 node tests\headless-check.mjs http://192.168.1.8:8788/index.html   # 6 视口 JS 错误
 node tests\screenshot.mjs        #     三视口 × 五阶段截图 → docs/screenshots/
