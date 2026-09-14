@@ -58,34 +58,64 @@ v4 宣称的"体积减 40%"指的是**开发版**；`min` 版实测更大。目�
 
 ```
 tower-defense/                    ← 目录名用 ASCII（详见 §2.6）
-├── index.html                  入口（viewport meta + 移动端适配）
+├── index.html                  入口（viewport meta + user-scalable=no）
+├── probe.html                  Phase 0 真机探针（验收用，不属于游戏本体）
+├── .nojekyll                   关闭 Jekyll（GitHub Pages 必需）
+├── .gitattributes / .gitignore
 ├── vendor/
 │   └── phaser.min.js           3.90.0 arcade-physics 构建（1061 KB）
-├── assets/                     Kenney CC0 素材
-│   ├── towers/ enemies/ tiles/ ui/ sfx/
-│   └── assets.js               唯一素材清单（key → 路径 + 尺寸）
+├── assets/
+│   └── assets.js               唯一素材清单（**当前为空** = 全部代码绘制占位，见 §6.6）
+│                               接入 Kenney 时再建 towers/ enemies/ tiles/ ui/ sfx/
 ├── src/
 │   ├── main.js                 Phaser.Game 配置 + 场景注册
-│   ├── scenes/
-│   │   ├── BootScene.js        加载素材 + 进度条
-│   │   ├── MenuScene.js        标题
-│   │   ├── LevelSelectScene.js 关卡选择（从注册表动态生成）
-│   │   ├── GameScene.js        核心玩法
-│   │   ├── HudScene.js         HUD（独立坐标系，并行运行）
-│   │   └── ResultScene.js      胜/败结算
+│   ├── scenes/                 Boot / Menu / LevelSelect / Game / Hud / Result（6 个）
 │   ├── entities/               Tower / Enemy / Projectile
-│   ├── systems/                WaveManager / Economy / Targeting / Adjacency / Layout
+│   ├── systems/                （10 个，均为纯逻辑或系统，不 import Phaser 的占多数）
+│   │   ├── Layout.js           三朝向布局
+│   │   ├── MapGrid.js          关卡 → 格类型表
+│   │   ├── PathMath.js         路径插值
+│   │   ├── WaveManager.js      波次状态机 + HP 曲线
+│   │   ├── Economy.js          金币收支与卖塔退款
+│   │   ├── Targeting.js        索敌策略
+│   │   ├── Adjacency.js        **协同规则**（通用 + 3 组特例）
+│   │   ├── Combat.js           伤害分配与结算
+│   │   ├── Save.js             存档（localStorage + 版本号 + 全失败降级）
+│   │   └── Audio.js            合成音效（Web Audio，零素材依赖）
 │   └── data/
-│       ├── towers.js           6 种塔数值 + 升级曲线
-│       ├── enemies.js          敌人数值
-│       ├── synergy.js          协同规则（通用 + 3 组特例）
+│       ├── towers.js           6 种塔 × 3 级数值
+│       ├── enemies.js          3 种敌人 + 精英
 │       └── levels/
 │           ├── index.js        ← 关卡注册表（新增地图只改这里）
-│           ├── level-01.js
-│           └── level-02.js
+│           ├── level-01.js     教学 · 8 波
+│           └── level-02.js     转弯 · 12 波
+├── scripts/
+│   └── serve.js                本地预览服务器（端口 8788）
+├── tests/                      自动化测试，**不参与部署**
+│   ├── _nav.mjs                场景导航辅助（禁止硬编码点击坐标）
+│   ├── check.html              纯逻辑 assert（浏览器可直接打开）
+│   ├── logic-check.mjs         190 项纯逻辑
+│   ├── combat-flow.mjs         26 项建造/升级/协同/卖塔/击杀
+│   ├── ui-flow.mjs             38 项真实点击 UI 交互
+│   ├── phase6-flow.mjs         29 项地图2/胜负/引导/存档/音效
+│   ├── stress-flow.mjs         11 项对象池与场景泄漏
+│   ├── smoke-flow.mjs          场景链路 + 敌人行走
+│   ├── headless-check.mjs      6 视口 JS 错误检查
+│   ├── perf-check.mjs          体积 / 首屏 / 帧率
+│   ├── verify-deploy.mjs       部署后线上验证
+│   └── screenshot.mjs          三视口 × 五阶段截图
 └── docs/
-    └── spec.md                 本文件
+    ├── spec.md                 本文件
+    ├── progress.md             进度台账（**压缩/中断后的恢复锚点**）
+    ├── SPEC-COVERAGE.md        spec 逐条 → 实现位置 → 状态
+    ├── DEPLOY.md               GitHub Pages 部署步骤
+    ├── ACCEPTANCE.md           真机验收清单（Phase 7）
+    └── screenshots/            截图产物
 ```
+
+> **修正记录**（Phase 11 逐条核对）：本节初版写于 Phase 1，此后架构演进留下 4 处不符 ——
+> `data/synergy.js`（协同实际在 `systems/Adjacency.js`）· `systems/` 少列一半文件 ·
+> `assets/` 的子目录当时并不存在 · 完全没有 `tests/` 与 `scripts/`。现已按实际更正。
 
 ### 2.5 响应式策略
 
@@ -224,13 +254,17 @@ BootScene ──▶ MenuScene ──▶ LevelSelectScene ──▶ GameScene ─
 | 塔 | 造价 | 定位 | 克制对象 |
 |---|---|---|---|
 | **箭塔** | 50 | 单体、快速、中射程 | 基线，性价比 |
-| **炮塔** | 80 | 溅射（半径 40）、慢、近射程 | 成群小怪 |
+| **炮塔** | 80 | 溅射（半径 0.55 格）、慢、近射程 | 成群小怪 |
 | **冰塔** | 60 | 减速 40%/2s、低伤 | 快速怪 |
 | **电塔** | 100 | 连锁闪电（跳 3 目标，无弹道） | 中密度群 |
 | **毒塔** | 70 | 持续伤害、**无视护甲** | 坦克 |
 | **狙击塔** | 120 | 超远射程、极慢、超高单伤 | 精英 |
 
 > **数值粒度说明**：上表只定**造价与定位**（相对关系）。各塔伤害/射程/攻速的**具体数值**及 18 条升级数据，在阶段③ 实施计划中逐条落定——它们的正确取值只能由实测决定，现在写死等于制造返工。
+
+> **单位约定（重要）**：`range` 与 `splash` 一律用**格**，与路径、索敌的单位统一。
+> 本表初版写"溅射半径 40"是**像素**单位 —— 那是固定 960×540 分辨率时代的说法。
+> Phase 0 改用 `Scale.RESIZE` + 动态格子后，像素值不再有恒定意义，故改为 **0.55 格**。
 
 **Lv3 必须有"质变"而非纯数值放大**，否则升级只是无聊的乘法：
 
@@ -474,8 +508,9 @@ cell = Math.min(availW / 8, availH / 5)   // 不向上 clamp！
 └──────────────┘
 ```
 
-- 建造栏**纯图标**（无文字标签）；横屏下 6 个各占约 120 px，竖屏下 3×2
-- 长按才弹文字说明——**手机无 hover**
+- 建造栏用**单字图标**（箭/炮/冰/电/毒/狙），不写完整名称；完整说明在**长按**时弹出（§6.2 上方）
+  - **竖屏**：3×2 网格排在底部，每格约 64 × 40 px
+  - **横屏**：竖排在**右侧浮层**，每格约 160 × 40 px
 - **朝向切换时 HUD 重排而非重建**（监听 `resize` / `orientationchange`，调用同一个 `layout()`）
 
 ### 6.3 双端输入映射（全部走 `pointerdown`，一套代码吃两端）
