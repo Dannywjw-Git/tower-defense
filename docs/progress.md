@@ -148,8 +148,25 @@ rAF 被节流**。它只能说明"逻辑没把主线程堵死"，**不能判定 
    确认三件事：① 能否打开 ② 点格子是否准 ③ 切后台回来 `visibilitychange` 是否 +1
    > 桌面无头浏览器**不能替代**这步：iOS 微信与安卓 X5 内核行为未知。
 
-2. **Phase 1 部署** —— 需要 GitHub 账号：`git init` → 建仓库 → 推送 → 开 Pages
-   验收：`https://<user>.github.io/<repo>/` 能打开并进游戏。
+2. **Phase 1 部署** —— **已尽可能替你铺好路**（2026-09-14 检查）：
+
+   | 项 | 状态 |
+   |---|---|
+   | git 仓库 | ✅ 已初始化（5 个提交，`main` 分支） |
+   | `remote origin` | ✅ **已配置** → `https://github.com/Dannywjw-Git/tower-defense.git` |
+   | GitHub 用户名 | ✅ `Dannywjw-Git`（已从凭据管理器读出） |
+   | 凭据 | ✅ 凭据管理器里**已有** GitHub 凭据（推送大概率无需手输 Token） |
+   | 8788 端口 | ✅ 正在监听 |
+   | 防火墙 | ✅ 已有 `node.exe` 的 Allow 规则（**手机能连上**） |
+   | 目标仓库 | ❌ **尚不存在**（`tower-defense` 返回 404） |
+   | 上线地址 | `https://Dannywjw-Git.github.io/tower-defense/` |
+
+   **你只需三步**：
+   1. 建空仓库：https://github.com/new → 名字填 **`tower-defense`** → **三个初始化选项都不要勾**
+   2. `git push -u origin main`（remote 已配好，直接推）
+   3. 仓库 Settings → Pages → Branch `main` + `/ (root)` → Save
+
+   推完跑 `node tests/verify-deploy.mjs` 一键验证线上是否正常。
 
 ### 无需用户（可继续推进）
 

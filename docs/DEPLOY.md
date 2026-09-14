@@ -16,22 +16,32 @@
 
 ### 1. 在 GitHub 建一个**空**仓库
 
-- 名字任意，建议 `tower-defense`
-- ⚠️ **不要**勾选 "Add a README" / ".gitignore" / "license"
-  （保持空仓库，否则推送时会冲突）
-- 可见性 Public / Private 均可（Private 也能开 Pages）
+打开 https://github.com/new
 
-### 2. 关联远程并推送
+| 项 | 值 |
+|---|---|
+| Repository name | **`tower-defense`**（必须叫这个，remote 已按此配置） |
+| 描述 | 可选 |
+| Public / Private | 均可（Private 也能开 Pages） |
+| Add a README file | ⚠️ **不要勾** |
+| Add .gitignore | ⚠️ **不要勾** |
+| Choose a license | ⚠️ **不要勾** |
+
+> 保持空仓库，否则推送时会因历史不一致而失败。
+
+### 2. 推送
+
+remote **已经配置好了**，直接推：
 
 ```powershell
 cd D:\Users\Danny\Documents\tower-defense
-git remote add origin https://github.com/<你的用户名>/tower-defense.git
 git push -u origin main
 ```
 
-**首次推送需要 Token**（GitHub 已不支持密码登录）：
+**关于认证**：本机的 git 凭据管理器里**已有 `Dannywjw-Git` 的 GitHub 凭据**，
+所以大概率直接就能推成功。若提示认证失败或要求密码：
 
-> GitHub → 右上头像 → Settings → Developer settings →
+> GitHub 已不支持密码登录。到 Settings → Developer settings →
 > Personal access tokens → **Fine-grained tokens** → Generate new token
 > → Repository access 选该仓库 → Permissions 给 **Contents: Read and write**
 > → 生成后**立刻复制**（只显示一次）→ 推送时把它当密码粘贴
@@ -51,8 +61,10 @@ git push -u origin main
 ### 4. 上线地址
 
 ```
-https://<你的用户名>.github.io/tower-defense/
+https://Dannywjw-Git.github.io/tower-defense/
 ```
+
+把这个链接发给朋友即可。
 
 ---
 
@@ -67,6 +79,21 @@ https://<你的用户名>.github.io/tower-defense/
 ---
 
 ## 验证部署成功
+
+### 一键验证（推荐）
+
+```powershell
+cd D:\Users\Danny\Documents\tower-defense
+node tests\verify-deploy.mjs
+```
+
+自动检查：页面可访问 · **无 404 资源**（相对路径在子路径部署下是否失效）·
+Phaser 已就绪 · 菜单可交互 · 能进游戏场景 · 无 JS 错误。
+
+> 若页面标题显示 **「Site not found · GitHub Pages」**，说明仓库还没建好、
+> 还没推送、或 Pages 还没构建完 —— 按上面步骤补齐后重跑即可。
+
+### 手工验证
 
 浏览器打开上线地址，应看到标题「塔防游戏」。
 
