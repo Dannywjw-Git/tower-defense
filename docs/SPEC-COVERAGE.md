@@ -94,11 +94,13 @@
 |---|---|---|---|
 | 6.1 | **竖屏原生可玩**（不要求横屏） | `Scale.RESIZE` + 8 列大格子 | ✅ 6 视口实测 |
 | 6.2 | HUD 两套排布（竖上下 / 横左右） | `HudScene.layout` | ✅ |
+| 6.2 | **长按弹文字说明**（手机无 hover） | `makeBuildButton` 的 `HOLD_MS` 长按判定 | ✅ **本轮补上**（此前遗漏） |
 | 6.3 | 双端都走 `pointerdown`、**无 hover** | `setupInput` | ✅ |
 | 6.3 | 出售**二次确认** | `SELL_CONFIRM_MS` 3 秒窗口 | ✅ 测试断言 |
 | 6.4 | 建造状态机四条分支 | `tryBuild` | ✅ 测试断言（含"留模式内"） |
 | 6.5 | 引导**事件驱动** | `tutorial` 数组 + `done()` 判定 | ✅ 测试断言四步 |
 | 6.5 | 首波 15 秒 | `prepTime: 15`（两关） | ✅ |
+| 6.5 | **波次预告显示敌人类型** | `HudScene.refresh` 的 `waveDesc` + `getState` 的 `nextWave` | ✅ **本轮补上**（此前遗漏） |
 | 6.6 | 素材占位不阻塞 | `assets/assets.js` 为空 + 代码绘制 | ✅ |
 
 ---

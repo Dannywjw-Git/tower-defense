@@ -194,6 +194,9 @@ export default class GameScene extends Phaser.Scene {
       totalWaves: this.wm.total,
       phase: this.wm.phase,
       countdown: this.wm.countdown,
+      // 波次预告（spec §6.5「常驻可查」要求显示下一波敌人类型）
+      currentWave: this.wm.current,
+      nextWave: this.wm.phase === 'prep' ? (this.wm.waves[this.wm.wave] || null) : null,
       enemies: this.enemies.length,
       towers: this.towers.length,
       landscape: this.L ? this.L.landscape : null,

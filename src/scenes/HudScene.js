@@ -10,6 +10,7 @@
 // 两者区域不重叠（竖屏上下 / 横屏左右），所以无需额外的事件拦截。
 
 import { TOWER_ORDER, TOWERS, buildCost, upgradeCost } from '../data/towers.js'
+import { enemyDef } from '../data/enemies.js'
 import { SELL_REFUND_RATE } from '../systems/Economy.js'
 
 const FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif'
@@ -18,6 +19,9 @@ const SIDE_MAX = 200
 
 /** 手机端「出售」需要二次确认，防止误触卖掉塔（spec §6.3） */
 const SELL_CONFIRM_MS = 3000
+
+/** 长按多久算「长按」（spec §6.2：长按弹文字说明，因为手机无 hover） */
+const HOLD_MS = 400
 
 export default class HudScene extends Phaser.Scene {
   constructor() {
@@ -97,8 +101,25 @@ export default class HudScene extends Phaser.Scene {
       fixedWidth: 34, align: 'center',
     }).setInteractive({ useHandCursor: true })
 
+    // 短按 = 进入建造模式；长按 = 弹文字说明
+    // （spec §6.2：手机无 hover，所以说明只能在长按时出现）
+    let holdTimer = null
+    let longPressed = false
+
     t.on('pointerdown', (_p, _x, _y, event) => {
       event.stopPropagation()
+      longPressed = false
+      holdTimer = this.time.delayedCall(HOLD_MS, () => {
+        longPressed = true
+        this.gs.flashNotice(`${def.name}｜${def.desc}`)
+      })
+    })
+
+    t.on('pointerup', (_p, _x, _y, event) => {
+      event.stopPropagation()
+      if (holdTimer) { holdTimer.remove(); holdTimer = null }
+      if (longPressed) return            // 长按只弹说明，不进建造模式
+
       const gs = this.gs
       // 金币不足 → 不入建造模式（spec §6.4）
       if (!gs.economy.canAfford(buildCost(typeId))) {
@@ -108,6 +129,16 @@ export default class HudScene extends Phaser.Scene {
       gs.setBuildMode(gs.buildMode === typeId ? null : typeId)
       this.refresh()
     })
+
+    // ⚠️ 滑出按钮**只取消长按计时**，绝不能当作一次短按 ——
+    // 曾经的实现把 onRelease 也挂在 pointerout 上，结果手指/鼠标从按钮移向
+    // 地图时会触发 pointerout，把刚进入的建造模式又切换掉了。
+    // 表现：「点塔图标 → 点地图格」永远建不出塔。
+    t.on('pointerout', () => {
+      if (holdTimer) { holdTimer.remove(); holdTimer = null }
+      longPressed = false
+    })
+
     return { typeId, text: t, def }
   }
 
@@ -192,9 +223,13 @@ export default class HudScene extends Phaser.Scene {
     if (!gs || !gs.getState) return
 
     const s = gs.getState()
+    // 波次预告要显示敌人类型（spec §6.5「常驻可查」）——
+    // 否则玩家无法提前决定该补哪种塔
+    const waveDesc = (w) => (w ? `${enemyDef(w.type).name} ×${w.count}` : '')
     const waveText = s.phase === 'done' ? '波次结束'
-      : s.phase === 'prep' ? `下一波 ${s.countdown.toFixed(0)}s`
-        : `第 ${s.wave}/${s.totalWaves} 波`
+      : s.phase === 'prep'
+        ? `下一波 ${s.countdown.toFixed(0)}s · ${waveDesc(s.nextWave)}`
+        : `第 ${s.wave}/${s.totalWaves} 波 · ${waveDesc(s.currentWave)}`
 
     this.status.setText(
       `💰 ${s.gold}    ❤️ ${s.lives}\n${waveText}    👾 ${s.enemies}` +

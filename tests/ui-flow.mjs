@@ -230,6 +230,67 @@ console.log('\n──── 暂停 / 加速 ────')
   say('再点加速 → 回到 1×', (await read('window.__ui.state()')).speed === 1)
 }
 
+console.log('\n──── 长按弹文字说明（spec §6.2：手机无 hover）────')
+{
+  await read('window.__ui.reset()')
+  const pt = await read('window.__ui.build(4)')      // 毒塔
+
+  // 长按：按下 → 等过 400ms 阈值 → 抬起
+  await page.mouse.move(pt.x, pt.y)
+  await page.mouse.down()
+  await page.waitForTimeout(650)
+  const during = await page.evaluate(() => {
+    const s = window.__ui.gs()
+    return { noticeVisible: s.notice.visible, noticeText: s.notice.text, buildMode: s.buildMode }
+  })
+  await page.mouse.up()
+  await page.waitForTimeout(250)
+  const after = await read('window.__ui.state()')
+
+  say('长按弹出该塔的说明', during.noticeVisible && /毒塔/.test(during.noticeText),
+      JSON.stringify(during.noticeText))
+  say('长按**不**进入建造模式',
+      during.buildMode === null && after.buildMode === null,
+      `按下中=${during.buildMode} 抬起后=${after.buildMode}`)
+
+  // 回归：短按仍要能进建造模式（改动风险点）
+  await click(await read('window.__ui.build(4)'))
+  const shortPress = await read('window.__ui.state()')
+  say('短按仍正常进入建造模式（回归）', shortPress.buildMode === 'poison',
+      'buildMode=' + shortPress.buildMode)
+  await read('window.__ui.gs().setBuildMode(null)')
+}
+
+console.log('\n──── 波次预告显示敌人类型（spec §6.5「常驻可查」）────')
+{
+  const r = await page.evaluate(async () => {
+    const s = window.__ui.gs()
+    await new Promise(r => setTimeout(r, 100))
+
+    // 造出「准备阶段」的状态：wave 归零、下一波是第一波（normal ×5）
+    s.wm.wave = 0
+    s.wm.phase = 'prep'
+    s.wm.timer = 12
+    await new Promise(r => setTimeout(r, 150))
+    const prep = window.game.scene.getScene('Hud').status.text
+
+    // 再造成「刷怪阶段」：当前波为 waves[0]
+    s.wm.wave = 1
+    s.wm.phase = 'spawning'
+    await new Promise(r => setTimeout(r, 150))
+    const spawning = window.game.scene.getScene('Hud').status.text
+
+    return { prep, spawning }
+  })
+
+  say('准备阶段显示「下一波 + 敌人类型 + 数量」',
+      /下一波/.test(r.prep) && /普通/.test(r.prep) && /×\d+/.test(r.prep),
+      JSON.stringify(r.prep.split('\n')[1] || ''))
+  say('刷怪阶段显示「第 N/M 波 + 敌人类型」',
+      /第 1\/\d+ 波/.test(r.spawning) && /普通/.test(r.spawning),
+      JSON.stringify(r.spawning.split('\n')[1] || ''))
+}
+
 console.log('\n──── 切后台自动暂停（spec §3.8）────')
 {
   await page.evaluate(() => window.__ui.reset())
