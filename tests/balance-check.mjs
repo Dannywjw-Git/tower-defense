@@ -17,13 +17,18 @@ import { LEVELS } from '../src/data/levels/index.js'
 
 const clearBonus = (wave) => 20 + wave * 5     // 与 Economy.waveClearBonus 一致
 
-/** 塔的「单体等效 DPS」—— 多目标机制按粗估倍率折算 */
+/** 塔的**单体**等效 DPS
+ *
+ *  ⚠️ 这里刻意**不折算**溅射/连锁的多目标收益 —— 真实通关测试（playthrough.mjs）暴露出：
+ *     初版给炮塔乘了 1.8 的溅射倍率，得出 25.9 DPS，于是把它选为"性价比最优"；
+ *     但**只有 1 只敌人时溅射毫无用处**，炮塔真实单体 DPS 只有 14.4（18×0.8），
+ *     比箭塔的 16 还低，造价却是 1.6 倍。
+ *     用单体值做下界估计，才能避免"推荐一个打不过第一波的塔"。 */
 function towerDps(typeId) {
   const s = levelStats(typeId, 1)
   const base = s.damage * s.fireRate
-  const mult = s.splash > 0 ? 1.8 : (s.chain > 1 ? 2.2 : (s.pierce > 1 ? 1.5 : 1))
-  const dot = s.poison || 0                    // 毒是额外的持续伤害
-  return base * mult + dot
+  const dot = s.poison || 0                    // 毒是额外的持续伤害，单体也生效
+  return base + dot
 }
 
 /** 性价比最优的塔（DPS per gold） */
