@@ -26,6 +26,7 @@
 
 ```
 tower-defense/
+├── README.md                   ★ 项目入口：快速开始 / 测试 / 部署 / 文档导航 / 改动须知
 ├── index.html                  user-scalable=no · 普通 script 引 Phaser + module 引 main.js
 ├── .nojekyll                   GitHub Pages 关闭 Jekyll
 ├── vendor/phaser.min.js        1,086,308 B = 1061 KB（Phaser 3.90.0 arcade-physics）
