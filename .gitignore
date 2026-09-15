@@ -21,3 +21,4 @@ node_modules/
 # 接入方案定案后，删掉此两行并只提交实际用到的图。
 src/kenney_tower-defense/
 src/kenney_tower-defense.zip
+commitmsg.txt
