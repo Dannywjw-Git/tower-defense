@@ -62,7 +62,7 @@ tower-defense/
 │   └── screenshots/            15 张截图
 ├── probe.html                  Phase 0 探针（真机验证用）
 ├── .nojekyll / .gitignore / .gitattributes
-└── git 仓库已初始化（2 个提交，main 分支）
+└── git 仓库已初始化（main 分支；提交数见 `docs/HANDOFF.md`，**不要在此处写死**）
 ```
 
 ---
@@ -155,7 +155,7 @@ rAF 被节流**。它只能说明"逻辑没把主线程堵死"，**不能判定 
 
    | 项 | 状态 |
    |---|---|
-   | git 仓库 | ✅ 已初始化（5 个提交，`main` 分支） |
+   | git 仓库 | ✅ 已初始化（`main` 分支） |
    | `remote origin` | ✅ **已配置** → `https://github.com/Dannywjw-Git/tower-defense.git` |
    | GitHub 用户名 | ✅ `Dannywjw-Git`（已从凭据管理器读出） |
    | 凭据 | ✅ 凭据管理器里**已有** GitHub 凭据（推送大概率无需手输 Token） |
