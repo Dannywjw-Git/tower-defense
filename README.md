@@ -80,8 +80,9 @@ node tests\verify-deploy.mjs
 
 | 文档 | 用途 | 什么时候看 |
 |---|---|---|
+| **`docs/HANDOFF.md`** | **交接文档** —— 环境怎么起、状态到哪、坑在哪、下一步做什么 | **新开会话接手时先读这个** |
 | **`docs/spec.md`** | 设计规格 —— **所有决策的权威依据** | 想知道"为什么这样设计" |
-| **`docs/progress.md`** | 进度台账 + **恢复锚点** | **会话中断/压缩后先看这个** |
+| **`docs/progress.md`** | 进度台账 + **完整恢复锚点** | 会话中断/压缩后查细节 |
 | `docs/SPEC-COVERAGE.md` | spec 逐条 → 实现位置 → 状态 | 想确认某条要求实现了没有 |
 | `docs/BALANCE.md` | 数值分析 + **试玩检查清单** | 觉得难度不对时 |
 | `docs/DEPLOY.md` | GitHub Pages 部署步骤 | 要上线时 |
