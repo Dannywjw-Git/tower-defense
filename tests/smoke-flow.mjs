@@ -61,6 +61,7 @@ for (const [label, width, height] of VIEWPORTS) {
     const gs = await page.evaluate(() => {
       const s = window.game && window.game.scene.getScene('Game')
       if (!s || !s.L || !s.grid) return null
+      const ps = window.PIXEL_SCALE || 1
       return {
         cell: s.L.cell,
         landscape: s.L.landscape,
@@ -68,12 +69,17 @@ for (const [label, width, height] of VIEWPORTS) {
         originY: s.L.originY,
         rows: s.grid.length,
         cols: s.grid[0] ? s.grid[0].length : 0,
-        cellW: s.L.cell * 8,
-        cellH: s.L.cell * 5,
+        // ⚠️ 单位换算：L 里的一切都是**逻辑像素**（= CSS × PIXEL_SCALE，见
+        // src/systems/Layout.js L73-74 与 HANDOFF §4.1 HiDPI 一节）。
+        // 必须除以 ps 换算回 CSS 像素，才能与下面的 width/height 比较。
+        // 漏这一步会让 DPR≥2 的视口全部**假失败**（曾报"网格宽 734 溢出 375"）。
+        ps,
+        cellW: (s.L.cell * 8) / ps,
+        cellH: (s.L.cell * 5) / ps,
       }
     })
     steps.push(['GameScene 布局', [gs
-      ? `cell=${gs.cell.toFixed(1)}px ${gs.landscape ? '横屏' : '竖屏'} grid=${gs.cols}×${gs.rows} 网格=${gs.cellW.toFixed(0)}×${gs.cellH.toFixed(0)}`
+      ? `cell=${gs.cell.toFixed(1)}逻辑px (${(gs.cell / gs.ps).toFixed(1)}CSSpx) ${gs.landscape ? '横屏' : '竖屏'} grid=${gs.cols}×${gs.rows} 网格=${gs.cellW.toFixed(0)}×${gs.cellH.toFixed(0)}CSSpx`
       : '<取不到>']])
 
     // 硬断言：网格必须存在、必须是 8×5、必须不溢出屏幕
@@ -83,6 +89,7 @@ for (const [label, width, height] of VIEWPORTS) {
       if (gs.cellW > width + 0.01) errs.push(`断言失败: 网格宽 ${gs.cellW.toFixed(1)} 溢出 ${width}`)
       if (gs.cellH > height + 0.01) errs.push(`断言失败: 网格高 ${gs.cellH.toFixed(1)} 溢出 ${height}`)
       if (gs.cell <= 0) errs.push('断言失败: cell <= 0')
+
     }
 
     // ── Phase 3 验收：敌人真的生成并沿路径行走 ──
