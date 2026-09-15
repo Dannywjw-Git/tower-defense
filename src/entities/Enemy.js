@@ -124,6 +124,7 @@ export class Enemy extends Phaser.GameObjects.Arc {
       if (this.hp <= 0) {
         this.hp = 0
         this.alive = false
+        this.hideOnDeath()      // 同 applyDamage：致死即隐藏，不留幽灵
         return true
       }
     }
@@ -178,7 +179,15 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.hpFill.setPosition(px.x - barW / 2, by)
   }
 
-  /** 受伤；返回是否本次击杀 */
+  /**
+   * 受伤；返回是否本次击杀。
+   *
+   * ⚠️ **这是一条孤儿方法** —— 全项目没有任何调用方（真实伤害统一走
+   *   `systems/Combat.js` 的 `applyDamage`）。保留它是为了将来可能的重构，
+   *   但**必须和 applyDamage 一样在致死时立刻隐藏**：否则一旦有人误用它，
+   *   敌人会变成「hp=0、alive=false，却仍留在场上、血条空着还不消失」的幽灵
+   *   （已实测复现）。真机截图里出现过这种空血敌人。
+   */
   takeDamage(amount, ignoreArmor = false) {
     if (!this.alive) return false
     const armor = ignoreArmor ? 0 : this.armor
@@ -187,9 +196,25 @@ export class Enemy extends Phaser.GameObjects.Arc {
     if (this.hp <= 0) {
       this.hp = 0
       this.alive = false
+      this.hideOnDeath()
       return true
     }
     return false
+  }
+
+  /**
+   * 死亡瞬间的视觉处理：**立刻隐藏本体与血条**。
+   *
+   * 为什么需要：致死与"从 enemies 列表移除"之间可能隔着若干帧 ——
+   *   · 暂停时 update() 直接 return，removeEnemy 要等恢复后才执行
+   *   · 同一帧内先结算伤害、再进入下一帧才 stepEnemies
+   * 若只把 alive 置 false 而不隐藏，玩家会看到「血条空了、怪还杵在那儿不动」，
+   * 观感像卡死。真机反馈里被误认为是 bug。
+   */
+  hideOnDeath() {
+    this.setVisible(false)
+    this.hpBg.setVisible(false)
+    this.hpFill.setVisible(false)
   }
 
   /** 归还对象池 */

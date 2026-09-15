@@ -86,6 +86,9 @@ export function applyDamage(enemy, damage, ignoreArmor = false) {
   if (enemy.hp <= 0) {
     enemy.hp = 0
     enemy.alive = false
+    // 立刻隐藏 —— 致死与 removeEnemy 之间可能隔若干帧（暂停时 update 直接 return），
+    // 不隐藏就会看到「血条空了、怪还杵着不动」的幽灵（真机反馈过）。
+    enemy.hideOnDeath?.()
     return true
   }
   return false

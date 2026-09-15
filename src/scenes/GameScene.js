@@ -7,7 +7,7 @@
 // （systems/*），本文件只负责：把逻辑结果画出来、把渲染对象管起来。
 
 import LEVELS from '../data/levels/index.js'
-import { computeLayout, cellToPixel, pixelToCell, COLS, ROWS } from '../systems/Layout.js'
+import { computeLayout, cellToPixel, pixelToCell, COLS, ROWS, px } from '../systems/Layout.js'
 import { buildGrid, PATH, BLOCKED, BUILDABLE } from '../systems/MapGrid.js'
 import { buildPath } from '../systems/PathMath.js'
 import { WaveManager } from '../systems/WaveManager.js'
@@ -37,7 +37,7 @@ const MAX_STEP = 0.1
 const TAP_COOLDOWN_MS = 250
 const TAP_DAMAGE_RATIO = 0.02
 const TAP_MAX_DAMAGE = 20
-const TAP_HIT_RADIUS = 0.7      // 格：点击命中的宽容半径
+const TAP_HIT_RADIUS = 0.7      // 格的倍数：点击命中的宽容半径（0.7 格 ≈ 半个格子）
 
 /**
  * 赏金随波次增长的系数。
@@ -577,19 +577,28 @@ export default class GameScene extends Phaser.Scene {
     const now = this.time.now
     if (now - this.lastTapAt < TAP_COOLDOWN_MS) return false
 
+    // ⚠️ 判定必须用**像素距离**，不要从像素反推格坐标再比。
+    //
+    //   原先的写法是 `gx = (pointer.x - originX) / cell`，再和 `e.gx`（格坐标）比。
+    //   但 `e.gx` 是敌人的**格坐标**（如 2.0 = 第 2 格中心），而反推出的 gx 会
+    //   落在格子内的任意位置 —— 点格中心时反推得 2.5，与 2.0 天生差 **半格**。
+    //   容差只有 0.7 格，扣掉半格只剩 0.2 格可点 —— 手机上几乎点不中。
+    //   真机反馈原话："点补刀，不确定敌人是否真的掉血" —— 因为大半点击根本没生效。
+    //
+    //   改用像素距离后，容差直接按"手指半径"定义（cell 的 0.7 倍 ≈ 半个格子），
+    //   与格子大小成正比，任何屏幕都成立。
     const L = this.L
-    const gx = (pointer.x - L.originX) / L.cell
-    const gy = (pointer.y - L.originY) / L.cell
+    const hitRadiusPx = L.cell * TAP_HIT_RADIUS
 
     let best = null
     let bestD = Infinity
     for (const e of this.enemies) {
       if (!e.alive) continue
-      const d = Math.hypot(e.gx - gx, e.gy - gy)
+      const d = Math.hypot(e.x - pointer.x, e.y - pointer.y)   // 像素距离
       if (d < bestD) { bestD = d; best = e }
     }
 
-    if (!best || bestD > TAP_HIT_RADIUS) return false
+    if (!best || bestD > hitRadiusPx) return false
 
     this.lastTapAt = now
     this.stats.taps += 1
@@ -598,9 +607,34 @@ export default class GameScene extends Phaser.Scene {
     const dmg = Math.min(TAP_MAX_DAMAGE, Math.max(1, Math.round(best.maxHp * TAP_DAMAGE_RATIO)))
     // 补刀无视护甲：它是"精准射击"，被护甲吃掉就失去意义
     const killed = applyDamage(best, dmg, true)
-    this.spawnTapEffect(best)
+    this.spawnTapEffect(best, dmg)
+    // 飘字：让玩家**看得见**补刀真的生效了
+    // （反馈原话："点补刀，不确定敌人是否真的掉血" —— 没有数字反馈就只能靠猜）
+    this.spawnTapNumber(best, dmg)
     if (killed) this.onKill(best)
     return true
+  }
+
+  /** 补刀伤害数字：短暂上浮后消失，同样复用同一个文本对象 */
+  spawnTapNumber(enemy, dmg) {
+    if (!this.tapNumber) {
+      this.tapNumber = this.add.text(-200, -200, '', {
+        fontFamily: '-apple-system, BlinkMacSystemFont, "PingFang SC", sans-serif',
+        fontSize: Math.round(px(13)) + 'px',
+        color: '#ffffff', fontStyle: 'bold',
+      }).setOrigin(0.5).setDepth(16).setVisible(false)
+    }
+    const t = this.tapNumber
+    if (this.tapNumTween) this.tapNumTween.stop()
+
+    t.setText('-' + dmg)
+      .setPosition(enemy.x, enemy.y - Math.round(px(14)))
+      .setAlpha(1).setScale(1).setVisible(true)
+
+    this.tapNumTween = this.tweens.add({
+      targets: t, y: t.y - Math.round(px(22)), alpha: 0, duration: 520,
+      onComplete: () => t.setVisible(false),
+    })
   }
 
   spawnTapEffect(enemy) {
