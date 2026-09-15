@@ -507,6 +507,33 @@ Start-Process node -ArgumentList "scripts\serve.js","8788" `
 
 ---
 
+## 第 21 轮：C1 塔图标（形状 + 颜色双重编码）
+
+**需求**：HANDOFF §3 ③ —— 玩家记不住橙/蓝/绿/紫方块哪个是什么塔。
+用户选定 **A 方案但用形状图标、不用单字**（理由：中文在 45 CSS px 的塔上会糊）。
+
+**产物**：
+- 新增 `src/systems/TowerIcon.js` —— 6 个矢量图标（三角/同心圆/雪花/闪电/三泡/准星）
+- `src/data/towers.js` —— 每塔加 `icon` 字段（纯数据）
+- `src/entities/Tower.js` —— `Rectangle` → `Container`（方块底 + 图标 Graphics）
+- `src/scenes/HudScene.js` —— 建造按钮改用图标（与场上同款）
+- 新增 `tests/icon-check.mjs`（9 项，纯 node）+ `tests/icon-shot.mjs`（视觉取证）
+
+**三个只有"看图"才能发现的坑（当时测试全绿）**：
+
+| # | 坑 | 为什么测试抓不到 |
+|---|---|---|
+| 1 | 用 `text.geom` 做守卫 → Phaser 的 **Text 没有 geom** → 按钮图标**一个都没画** | 没有断言检查按钮图标存在 |
+| 2 | `setAlpha(0)` 隐藏文字 → **背景色一起被隐藏**，按钮没了方块底 | 断言只看文本内容，不看视觉 |
+| 3 | 图标与中文字并排 → 按钮仅 34 px 宽，两者重叠成一团 | 同上 |
+
+**结论**：已补 5 项断言（塔图标互不相同 / 颜色互不相同 / 按钮图标已画 / 等等），
+并在 HANDOFF §4.3 加了铁律「**新增视觉元素必须看图验证**」。
+
+**回归**：**399 项断言全绿**（384 → 399）+ 6 视口 0 JS 错误。
+
+---
+
 ## 文档对齐记录（2026-09-15）
 
 **起因**：本轮核对时发现 `progress.md` 与 `docs/HANDOFF.md` **口径打架**，
@@ -526,8 +553,9 @@ Start-Process node -ArgumentList "scripts\serve.js","8788" `
 
 ### 本轮的恢复锚点（跨会话用）
 
-- **当前阶段**：① 发散/分类（升级工作**刚启动**，未写任何代码）
-- **产物路径**：无新增代码产物；本轮只改 `docs/progress.md`（本文件）
-- **下一步**：推送上线（1 步）→ 然后定"升级"范围：
-  **C1 塔颜色辨识方案 A/B/C** 与 **Kenney 等距素材接入路线 甲/乙/丙**（均待用户拍板）
+- **当前阶段**：④ 实现完成 → ⑤ 验证通过（C1 塔图标）；**已上线**
+- **产物路径**：`src/systems/TowerIcon.js`（新）· `src/entities/Tower.js` ·
+  `src/scenes/HudScene.js` · `src/data/towers.js` ·
+  `tests/icon-check.mjs`（新）· `tests/icon-shot.mjs`（新）
+- **下一步**：Kenney 素材接入方案（等距不兼容，三路线待用户选甲/乙/丙）
 

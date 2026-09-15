@@ -16,6 +16,7 @@ import { SELL_REFUND_RATE } from '../systems/Economy.js'
 // —— 曾经这里还有一个 `const SIDE_MAX = 200`，与 import 撞名导致
 //    "Identifier 'SIDE_MAX' has already been declared"，整个游戏起不来。
 import { px, setPixelScale, SIDE_MAX_PX as SIDE_MAX, SIDE_RATIO } from '../systems/Layout.js'
+import { drawTowerIcon } from '../systems/TowerIcon.js'
 
 const FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif'
 
@@ -110,10 +111,22 @@ export default class HudScene extends Phaser.Scene {
     const def = TOWERS[typeId]
     const S = (n) => px(n)
     const t = this.add.text(0, 0, def.short, {
-      fontFamily: FONT, fontSize: S(17) + 'px', color: '#0b0b0f',
+      // ⚠️ 文本保留 `def.short`（如「箭」）但**不可见**：
+      //    · 图标画在同一个位置（见 drawBuildButtonIcon），视觉上只看到图标；
+      //    · 文本内容非空 → `tests/_nav.mjs` 靠 `o.text` 正则找按钮的机制不受影响，
+      //      否则整套场景导航会静默点空（这是本项目踩过多次的坑）；
+      //    · 尺寸（padding/fixedWidth）保持不变，既有 UI 测试的定位不变。
+      //
+      // ⚠️ 用**透明色**而不是 `setAlpha(0)`：alpha 会把**背景色一起隐藏**，
+      //    按钮就没了方块底、也看不出"选中/买得起"的状态（看图才发现）。
+      //    改透明色只隐藏字形，背景块保留。
+      fontFamily: FONT, fontSize: S(17) + 'px', color: 'rgba(0,0,0,0)',
       backgroundColor: '#2b3d4f', padding: { x: S(10), y: S(9) },
       fixedWidth: S(34), align: 'center',
     }).setInteractive({ useHandCursor: true })
+
+    // 图标层（塔色 + 形状），与场上的塔共用 drawTowerIcon
+    const g = this.add.graphics()
 
     // 短按 = 进入建造模式；长按 = 弹文字说明
     // （spec §6.2：手机无 hover，所以说明只能在长按时出现）
@@ -153,7 +166,31 @@ export default class HudScene extends Phaser.Scene {
       longPressed = false
     })
 
-    return { typeId, text: t, def }
+    return { typeId, text: t, def, iconG: g }
+  }
+
+  /**
+   * 画建造按钮上的塔图标（塔色 + 形状）。
+   *
+   * 设计决定：**按钮显示图标，不显示中文字**。
+   *   按钮只有 ~34 CSS px 宽，塞不下"字 + 图标"两者；并排会重叠、叠字会糊。
+   *   改为「空按钮 + 居中图标」后，按钮与场上的塔**长得一模一样**，
+   *   "点哪个图标 = 建哪种塔"变成零认知成本的直接映射 —— 这正是 C1 的目的。
+   *
+   *   塔名仍可读到：长按按钮会弹 `${def.name}｜${def.desc}`（spec §6.2 原有功能）。
+   *
+   * ⚠️ 不要用 `r.geom` 做守卫 —— Phaser 的 **Text 对象没有 geom**
+   *    （那是 Shape 才有的属性）。初版据此守卫，导致本函数永远提前 return、
+   *    按钮图标**一个都没画出来**，而测试全绿（没有断言检查按钮图标）。
+   *    教训：新增视觉元素必须**看图**验证，断言覆盖不到的地方最容易静默失效。
+   */
+  drawBuildButtonIcon(b) {
+    const S = (n) => px(n)
+    const r = b.text
+    if (!r || !r.width) return
+    // 居中画在按钮上；文本已被清空，不存在遮挡
+    drawTowerIcon(b.iconG, b.def.icon, r.x + r.width / 2, r.y + r.height / 2,
+                  Math.min(r.width, r.height) / 2, b.def.color)
   }
 
   setPanelVisible(v) {
@@ -223,6 +260,9 @@ export default class HudScene extends Phaser.Scene {
     }
 
     if (this.debugText) this.debugText.setPosition(W - S(6), S(6))
+
+    // 按钮位置定了之后重画图标（图标是绝对坐标，跟按钮走）
+    for (const b of this.buildButtons) this.drawBuildButtonIcon(b)
 
     // ⚠️ 调试面板占右上角，必须让「暂停 / 1×」避开它 —— 否则整块盖住，玩家点不到加速。
     //
@@ -307,8 +347,11 @@ export default class HudScene extends Phaser.Scene {
       const selected = gs.buildMode === b.typeId
       const affordable = gs.economy.canAfford(buildCost(b.typeId))
       const bg = selected ? '#4ade80' : affordable ? '#2b3d4f' : '#1a222b'
-      const fg = selected ? '#0b0b0f' : affordable ? '#cfe3f2' : '#4a5f73'
-      b.text.setBackgroundColor(bg).setColor(fg)
+      // ⚠️ 只改背景（表示选中/买得起），**不要 setColor** —— 按钮已改为纯图标显示，
+      //    字形必须保持透明，否则中文字会重新盖在图标上。
+      //    买不起的状态改由图标自身变暗表示（见下方 iconAlpha）。
+      b.text.setBackgroundColor(bg)
+      b.iconG.setAlpha(affordable || selected ? 1 : 0.35)
     }
 
     this.cancelBtn.setVisible(!!gs.buildMode)

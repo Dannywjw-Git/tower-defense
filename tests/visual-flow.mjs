@@ -139,16 +139,20 @@ console.log('\n──── 2. 塔与敌人的形状必须不同（否则玩家�
       if (gm.width !== undefined && gm.height !== undefined) return 'rect'
       return 'other'
     }
+    // ⚠️ 塔自 C1 起是 **Container**（方块底 rect + 图标 graphics），
+    //    所以形状要看它的子对象 `t.rect`，不是容器本身（容器无 geom）。
     return {
-      towerShape: shapeOf(t), enemyShape: shapeOf(e),
-      towerR: t.radius, enemyR: e.radius,
-      towerW: Math.round(t.width), towerH: Math.round(t.height),
+      towerShape: shapeOf(t.rect), enemyShape: shapeOf(e),
+      towerR: t.rect.radius, enemyR: e.radius,
+      towerW: Math.round(t.rect.width), towerH: Math.round(t.rect.height),
+      hasIconG: !!t.iconG,
     }
   })
   say('塔用矩形几何绘制', r.towerShape === 'rect', 'geom=' + r.towerShape)
   say('敌人用圆形几何绘制', r.enemyShape === 'circle', 'geom=' + r.enemyShape)
   say('塔与敌人形状不同（玩家可分辨）', r.towerShape !== r.enemyShape,
       `${r.towerShape} vs ${r.enemyShape}`)
+  say('塔带图标层（C1：形状+颜色双重编码）', r.hasIconG, 'iconG=' + r.hasIconG)
   await page.close()
 }
 
@@ -251,6 +255,80 @@ console.log('\n──── 5. 引导提示贴近地图（不飘在空白里）�
   say('引导提示可见（首关）', r.visible === true)
   say('引导提示在地图上方 60px 以内', r.visible && (r.gridTop - r.tutorialY) <= 60,
       `提示 y=${r.tutorialY.toFixed(0)} 地图顶 y=${r.gridTop.toFixed(0)} 间距 ${(r.gridTop - r.tutorialY).toFixed(0)}px`)
+  await page.close()
+}
+
+console.log('\n──── 6. 塔图标（C1：玩家能分辨 6 种塔）────')
+{
+  const page = await browser.newPage({ viewport: { width: 375, height: 812 } })
+  await page.goto(BASE + '/index.html', { waitUntil: 'load', timeout: 30000 })
+  await page.waitForTimeout(1000)
+  await enterGame(page)
+  await page.waitForTimeout(300)
+
+  const r = await page.evaluate(() => {
+    const g = window.game.scene.getScene('Game')
+    g.tutorial = []
+    const ids = ['arrow', 'cannon', 'ice', 'tesla', 'poison', 'sniper']
+    // ⚠️ 不要硬编码格坐标 —— 路径格不可建塔，猜错会得到 invalid-cell。
+    //    从网格里动态挑出**全部可建格**（与 GameScene.canBuild 同口径）。
+    const spots = []
+    for (let cy = 0; cy < g.grid.length && spots.length < 6; cy++) {
+      for (let cx = 0; cx < g.grid[0].length && spots.length < 6; cx++) {
+        if (g.canBuild(cx, cy)) spots.push([cx, cy])
+      }
+    }
+    const out = []
+    ids.forEach((id, i) => {
+      const [cx, cy] = spots[i]
+      // 金币可能不足，直接给够（这是视觉检查，不是经济检查）
+      g.economy.gold = 9999
+      const res = g.buildTower(cx, cy, id)
+      if (!res.ok) { out.push({ id, built: false, reason: res.reason }); return }
+      const t = res.tower
+      const cmds = t.iconG.commandBuffer || []
+      out.push({
+        id, built: true,
+        // 指纹 = 绘制指令的类型与坐标序列，同款图标必然同指纹、异款必然异指纹
+        fingerprint: cmds.map(c => `${c[0]}:${(c[1] || 0).toFixed(1)},${(c[2] || 0).toFixed(1)}`).join(';'),
+        hasRect: !!t.rect,
+        // 图标必须真的画了东西
+        cmdCount: cmds.length,
+        color: t.def.color,
+      })
+    })
+    return { towers: out, iconIds: ids }
+  })
+
+  const built = r.towers.filter(t => t.built)
+  say('6 种塔全部建成（可建格足够）', built.length === 6,
+      built.length === 6 ? '' : JSON.stringify(r.towers.filter(t => !t.built)))
+
+  const drawn = built.filter(t => t.cmdCount > 0)
+  say('每座塔的图标都真的画了指令', drawn.length === 6,
+      `有指令的塔 ${drawn.length}/6`)
+
+  const uniq = new Set(drawn.map(t => t.fingerprint))
+  say('6 种塔的图标**互不相同**（形状可区分）', uniq.size === 6,
+      `不同图标 ${uniq.size}/6`)
+
+  const colors = new Set(built.map(t => t.color))
+  say('6 种塔的颜色也互不相同（颜色可区分）', colors.size === 6,
+      `不同颜色 ${colors.size}/6`)
+
+  // 建造按钮上的图标 —— 曾经因为用 `text.geom` 做守卫（Text 没有 geom）
+  // 导致按钮图标**一个都没画**，而当时所有测试全绿。这里补上守卫。
+  const btn = await page.evaluate(() => {
+    const hud = window.game.scene.getScene('Hud')
+    return hud.buildButtons.map(b => {
+      const cmds = b.iconG.commandBuffer || []
+      return { typeId: b.typeId, cmdCount: cmds.length, x: b.iconG.x, visible: b.iconG.visible }
+    })
+  })
+  const drawnBtns = btn.filter(b => b.cmdCount > 0)
+  say('6 个建造按钮都画了图标', drawnBtns.length === 6,
+      `有图标的按钮 ${drawnBtns.length}/6`)
+
   await page.close()
 }
 

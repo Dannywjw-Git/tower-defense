@@ -17,8 +17,8 @@
 | 根目录 | `D:\Users\Danny\Documents\tower-defense` |
 | 引擎 | Phaser 3.90.0（本地 `vendor/phaser.min.js`，1,086,308 B） |
 | 技术栈 | **原生 ES modules，无打包器、无 npm 依赖、无构建步骤** |
-| 规模 | `src/` 25 文件 · 2389 行 · `tests/` 17 个脚本 |
-| 测试 | **384 项断言全绿 + 6 视口 0 JS 错误** |
+| 规模 | `src/` 26 文件 · `tests/` 20 个脚本 |
+| 测试 | **399 项断言全绿 + 6 视口 0 JS 错误** |
 | git | 18 个提交，`main` 分支，工作区干净 |
 | 目标 | 部署到 GitHub Pages 给朋友玩（仓库已建、**待推送**） |
 
@@ -103,12 +103,38 @@ node scripts\serve.js 8788
 手机上开 `?debug=1`，读右上角 `FPS xx.x`，**满波时**（地图 2 后期）应 ≥30。
 若掉帧：地址加 `?dpr=1` 退回旧渲染（清晰度下降但省填充率）。
 
-### ③ 塔的颜色辨识（用户提过，尚未决定方案）
+### ③ 塔的颜色辨识 ✅ **已解决（2026-09-15，C1）**
 
-截图显示场上出现橙/蓝/绿/紫方块，**玩家记不住哪个方块是什么塔**。三个方向未选：
-- **A** 方块内加单字（箭/炮/冰/电/毒/狙），与底部按钮一致
-- **B** 保持现状靠颜色记
-- **C** 不同塔用不同形状（方/菱/圆/三角）
+**原问题**：场上出现橙/蓝/绿/紫方块，**玩家记不住哪个方块是什么塔**。
+
+**方案**：用户选定 **A（加图标）但用形状图标、不用单字**。
+
+**实现**：新增 `src/systems/TowerIcon.js` —— 6 个**矢量图标**（Phaser Graphics
+绘制，零素材、零依赖）：
+
+| 塔 | 图标 | 塔 | 图标 |
+|---|---|---|---|
+| 箭塔 | ▲ 实心三角 | 毒塔 | ⬤⬤⬤ 三个毒泡 |
+| 炮塔 | ◎ 圆+外圈 | 狙击塔 | ✛ 十字准星 |
+| 冰塔 | ✳ 六角雪花 | 电塔 | ⚡ 闪电折线 |
+
+**关键设计**：
+- **形状 + 颜色双重编码** —— 色盲玩家也能分辨（仅靠颜色正是原问题）
+- **建造按钮与场上的塔用同一套 `drawTowerIcon`** —— "点哪个图标 = 建哪种塔"
+  成为零认知成本的直接映射
+- 按钮显示**图标本身**（文本改透明色保留，供 `_nav.mjs` 定位用），
+  买不起时图标降为 35% 透明度
+- `Tower` 由 `Rectangle` 改为 `Container`（方块底 + 图标 Graphics）；
+  图标**只在建造/升级/转屏时重画**，不在每帧重画（spec §3.2）
+
+**踩到的三个坑（都靠"看图"才发现，测试全绿）**：
+
+| # | 坑 | 后果 |
+|---|---|---|
+| 1 | 用 `text.geom` 做守卫 | Phaser 的 **Text 没有 geom**（那是 Shape 的属性）→ 函数永远提前 return，**按钮图标一个都没画出来** |
+| 2 | 用 `setAlpha(0)` 隐藏文字 | alpha 把**背景色一起隐藏** → 按钮没了方块底、看不出选中/买不起状态。改用 `color: 'rgba(0,0,0,0)'` |
+| 3 | 图标与中文字并排 | 按钮仅 ~34 CSS px 宽，两者重叠。改为按钮只显示图标 |
+
 
 ### ④ Kenney 素材接入（可选，不阻塞）
 
@@ -178,6 +204,8 @@ node scripts\serve.js 8788
 | `WaveManager` 进刷怪阶段不要重置 `timer` | 会丢 dt 溢出的刷怪额度（卡顿帧丢怪） |
 | `pointerout` 不能当作一次点击 | 手指从按钮移向地图会触发它，把刚进的建造模式取消 |
 | 一律用对象池，不 `new`/`destroy` | 补刀特效曾违反此条 → 真机卡顿 |
+| 新增视觉元素**必须看图验证** | C1 的按钮图标曾因 `text.geom` 守卫**静默一个都没画**，而当时全测试全绿 |
+| Phaser `Text` 没有 `geom`；`setAlpha(0)` 会连背景一起隐藏 | 同上两条，详见 §3 ③ 的坑表 |
 
 **完整清单见 `docs/progress.md` 的「已修正的架构缺陷」与 `README.md` 的「改动前请注意」。**
 
@@ -193,11 +221,13 @@ node tests\ui-flow.mjs           #  38 项真实鼠标点击 UI 交互
 node tests\phase6-flow.mjs       #  29 项地图2/胜负/引导/存档/音效
 node tests\stress-flow.mjs       #  11 项对象池复用与场景泄漏
 node tests\mechanics-flow.mjs    #  17 项机制组合（协同降级/溅射/连锁/减速/毒/集火）
-node tests\visual-flow.mjs       #  42 项视觉与布局结构（重叠/形状/血条/调试面板）
+node tests\visual-flow.mjs       #  48 项视觉与布局结构（重叠/形状/血条/塔图标/调试面板）
 node tests\human-flow.mjs        #  31 项完整人机流程预演
+node tests\icon-check.mjs        #   9 项塔图标自检（纯 node，无需浏览器）
 node tests\smoke-flow.mjs        #     场景链路 + 敌人行走
 node tests\headless-check.mjs http://192.168.1.8:8788/index.html   # 6 视口 JS 错误
 node tests\screenshot.mjs        #     三视口 × 五阶段截图 → docs/screenshots/
+node tests\icon-shot.mjs         #     建满 6 塔后的截图（验证图标，纯视觉改动必跑）
 
 # 纯 node，不需要浏览器与服务
 node tests\balance-check.mjs     # 数值自洽性分析（解析式近似）

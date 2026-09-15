@@ -10,7 +10,7 @@ export const MAX_LEVEL = 3
 
 export const TOWERS = {
   arrow: {
-    id: 'arrow', name: '箭塔', short: '箭', color: 0x4ade80,
+    id: 'arrow', name: '箭塔', short: '箭', color: 0x4ade80, icon: 'arrow',
     targeting: 'first',
     desc: '单体 · 快速 · 中射程 —— 性价比基线',
     levels: [
@@ -21,7 +21,7 @@ export const TOWERS = {
   },
 
   cannon: {
-    id: 'cannon', name: '炮塔', short: '炮', color: 0xffa94d,
+    id: 'cannon', name: '炮塔', short: '炮', color: 0xffa94d, icon: 'cannon',
     targeting: 'first',
     desc: '溅射 · 慢 · 近射程 —— 克制成群小怪',
     levels: [
@@ -32,7 +32,7 @@ export const TOWERS = {
   },
 
   ice: {
-    id: 'ice', name: '冰塔', short: '冰', color: 0x63c7ff,
+    id: 'ice', name: '冰塔', short: '冰', color: 0x63c7ff, icon: 'ice',
     targeting: 'first',
     desc: '减速 · 低伤 —— 克制快速怪',
     levels: [
@@ -43,7 +43,7 @@ export const TOWERS = {
   },
 
   tesla: {
-    id: 'tesla', name: '电塔', short: '电', color: 0xc792ff,
+    id: 'tesla', name: '电塔', short: '电', color: 0xc792ff, icon: 'tesla',
     targeting: 'first',
     desc: '连锁闪电（无弹道）—— 克制中密度群',
     levels: [
@@ -54,7 +54,7 @@ export const TOWERS = {
   },
 
   poison: {
-    id: 'poison', name: '毒塔', short: '毒', color: 0x8bc34a,
+    id: 'poison', name: '毒塔', short: '毒', color: 0x8bc34a, icon: 'poison',
     targeting: 'first',
     desc: '持续伤害 · 无视护甲 —— 克制坦克',
     levels: [
@@ -65,7 +65,7 @@ export const TOWERS = {
   },
 
   sniper: {
-    id: 'sniper', name: '狙击塔', short: '狙', color: 0xff6b6b,
+    id: 'sniper', name: '狙击塔', short: '狙', color: 0xff6b6b, icon: 'sniper',
     targeting: 'strongest',
     desc: '超远射程 · 极慢 · 超高单伤 —— 克制精英',
     levels: [
