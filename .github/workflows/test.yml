@@ -1,0 +1,24 @@
+name: 测试
+
+# 每次 push 到 main / 每次 PR 时，自动跑一遍纯逻辑检查。
+# 说明：只跑不依赖浏览器的检查。视觉/真机类检查（tests/visual-flow.mjs 等）
+# 需要本地浏览器与真机，不在此列 —— 见 docs/ACCEPTANCE.md。
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  logic:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 项目零依赖、零构建（见 .gitignore 注释），所以无需 npm install。
+      - name: 数值平衡检查
+        run: node tests/balance-check.mjs
