@@ -39,6 +39,17 @@ const TAP_DAMAGE_RATIO = 0.02
 const TAP_MAX_DAMAGE = 20
 const TAP_HIT_RADIUS = 0.7      // 格：点击命中的宽容半径
 
+/**
+ * 赏金随波次增长的系数。
+ *
+ * 为什么需要：敌人 HP 每波 +18%（spec §4.2），但赏金原本是**死数**（普通怪永远 8 金）。
+ * 两者一脱钩就出现「打得越多、越买不起塔」——实测玩家在第二关中期卡死，
+ * 报的就是"钱不够"。
+ *
+ * 0.15 略低于 HP 增长率 0.18：让难度仍随波次上升，只是不至于断崖。
+ */
+const BOUNTY_GROWTH_PER_WAVE = 0.12
+
 export default class GameScene extends Phaser.Scene {
   constructor() {
     super('Game')
@@ -124,7 +135,7 @@ export default class GameScene extends Phaser.Scene {
   // ═══════════════════════ 布局 ═══════════════════════
 
   layout() {
-    this.L = computeLayout(this.scale.width, this.scale.height)
+    this.L = computeLayout(this.scale.width, this.scale.height, window.PIXEL_SCALE || 1)
     this.draw()
     for (const e of this.enemies) e.syncPixel(this.path, this.L)
     for (const t of this.towers) t.syncPixel(this.L)
@@ -288,6 +299,11 @@ export default class GameScene extends Phaser.Scene {
       armor: def.armor,
       bounty: def.bounty,
       leakDamage: def.leakDamage,
+      // 赏金随波次增长 —— 敌人 HP 每波 +18%，而赏金原本**固定不变**，
+      // 两者脱钩会导致「越往后越买不起塔」（实测：玩家反馈"钱不够"）。
+      // 系数默认 0.15；`TEST_BOUNTY_GROWTH` 仅由自动平衡脚本注入，正常游玩为 undefined。
+      bountyWave: this.wm ? this.wm.wave : 1,
+      bountyGrowth: this.TEST_BOUNTY_GROWTH ?? BOUNTY_GROWTH_PER_WAVE,
     })
     e.syncPixel(this.path, this.L)
     this.enemies.push(e)

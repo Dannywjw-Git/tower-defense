@@ -66,7 +66,10 @@ export class Enemy extends Phaser.GameObjects.Arc {
     this.hp = cfg.hp
     this.speed = cfg.speed ?? 1.2      // 格 / 秒
     this.armor = cfg.armor ?? 0
-    this.bounty = cfg.bounty ?? 0
+    // 赏金随波次增长（config 见 GameScene.BOUNTY_GROWTH_PER_WAVE 的说明）
+    const g = cfg.bountyGrowth ?? 0
+    const wave = cfg.bountyWave ?? 1
+    this.bounty = Math.round((cfg.bounty ?? 0) * (1 + g * Math.max(0, wave - 1)))
     this.leakDamage = cfg.leakDamage ?? 1     // 漏掉一只扣几点生命（精英是 3）
     this.pathDist = 0
     this.alive = true

@@ -1,6 +1,7 @@
-// MenuScene —— 标题与入口
+﻿// MenuScene —— 标题与入口
 
 import { unlock, SFX } from '../systems/Audio.js'
+import { px, setPixelScale } from '../systems/Layout.js'
 import { load } from '../systems/Save.js'
 
 export default class MenuScene extends Phaser.Scene {
@@ -9,17 +10,19 @@ export default class MenuScene extends Phaser.Scene {
   }
 
   create() {
+    setPixelScale(window.PIXEL_SCALE || 1)
+    const S = (n) => px(n)
     this.title = this.add.text(0, 0, '塔防游戏', {
-      fontSize: '44px', color: '#e8e8ea', fontStyle: 'bold',
+      fontSize: S(44) + 'px', color: '#e8e8ea', fontStyle: 'bold',
     }).setOrigin(0.5)
 
     this.sub = this.add.text(0, 0, 'tower-defense', {
-      fontSize: '15px', color: '#4a5f73',
+      fontSize: S(15) + 'px', color: '#4a5f73',
     }).setOrigin(0.5)
 
     this.btn = this.add.text(0, 0, '开始游戏', {
-      fontSize: '22px', color: '#0b0b0f', backgroundColor: '#4ade80',
-      padding: { x: 30, y: 14 },
+      fontSize: S(22) + 'px', color: '#0b0b0f', backgroundColor: '#4ade80',
+      padding: { x: S(30), y: S(14) },
     }).setOrigin(0.5).setInteractive({ useHandCursor: true })
 
     // 音频必须在**用户手势**里解锁（iOS / 微信策略，spec §4.5）
@@ -34,11 +37,11 @@ export default class MenuScene extends Phaser.Scene {
       ? `最佳战绩：${save.best.score} 分 · 第 ${save.best.wave} 波`
       : '还没有战绩'
     this.best = this.add.text(0, 0, bestText, {
-      fontSize: '13px', color: '#5a7186',
+      fontSize: S(13) + 'px', color: '#5a7186',
     }).setOrigin(0.5)
 
     this.credit = this.add.text(0, 0, 'Art & SFX: Kenney.nl', {
-      fontSize: '12px', color: '#37485a',
+      fontSize: S(12) + 'px', color: '#37485a',
     }).setOrigin(0.5)
 
     this.layout()

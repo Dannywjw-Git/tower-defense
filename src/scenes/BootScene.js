@@ -2,17 +2,21 @@
 //
 // Phase 1 阶段无素材，仅验证场景链路。素材加载在 Phase 6 接入 assets.js。
 
+import { px, setPixelScale } from '../systems/Layout.js'
+
 export default class BootScene extends Phaser.Scene {
   constructor() {
     super('Boot')
   }
 
   create() {
+    setPixelScale(window.PIXEL_SCALE || 1)
+    const S = (n) => px(n)
     const W = this.scale.width
     const H = this.scale.height
 
     this.add.text(W / 2, H / 2 - 16, '加载中…', {
-      fontSize: '20px',
+      fontSize: S(20) + 'px',
       color: '#8fa6bb',
     }).setOrigin(0.5)
 

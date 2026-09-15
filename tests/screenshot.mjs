@@ -1,4 +1,4 @@
-// 截图取证 —— node tests/screenshot.mjs [baseUrl] [outDir]
+﻿// 截图取证 —— node tests/screenshot.mjs [baseUrl] [outDir]
 //
 // 走一遍 菜单 → 关卡选择 → 游戏，逐个视口截图。
 // "无 JS 错误"不等于"画对了"，截图是给人看的证据。
@@ -54,13 +54,19 @@ for (const [name, width, height] of SHOTS) {
 
   // ── 建造模式 → 建两座相邻塔（触发协同）→ 选中展示信息面板 ──
   const evalPt = (expr) => page.evaluate(expr)
-  const btnCenter = (idx) => evalPt(`(() => {
-    const t = window.game.scene.getScene('Hud').buildButtons[${idx}].text
-    return { x: t.x + t.width / 2, y: t.y + t.height / 2 } })()`)
+  const PS = () => page.evaluate('window.PIXEL_SCALE || 1')
+  const btnCenter = async (idx) => {
+    const pt = await evalPt(`(() => {
+      const t = window.game.scene.getScene('Hud').buildButtons[${idx}].text
+      const ps = window.PIXEL_SCALE || 1
+      return { x: (t.x + t.width / 2) / ps, y: (t.y + t.height / 2) / ps } })()`)
+    return pt
+  }
   const cellCenter = (cx, cy) => evalPt(`(() => {
     const L = window.game.scene.getScene('Game').L
-    return { x: L.originX + ${cx} * L.cell + L.cell / 2,
-             y: L.originY + ${cy} * L.cell + L.cell / 2 } })()`)
+    const ps = window.PIXEL_SCALE || 1
+    return { x: (L.originX + ${cx} * L.cell + L.cell / 2) / ps,
+             y: (L.originY + ${cy} * L.cell + L.cell / 2) / ps } })()`)
 
   const a = await btnCenter(0)                      // 箭塔
   await page.mouse.click(a.x, a.y)

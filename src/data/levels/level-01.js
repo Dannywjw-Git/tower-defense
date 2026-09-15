@@ -25,7 +25,9 @@ export default {
 
   blocked: [],
 
-  startGold: 120,
+  // 170（原 120）：自动平衡系统实测，120 时第 3 波（快速怪）必崩 —— 只够 2 座塔，
+  // 而快速怪穿越路径仅 6.9s，射程窗口太短。170 够 3 座塔，实测剩 14 命通关。
+  startGold: 170,
   startLives: 20,
   prepTime: 15,          // spec §6.5：首波 15 秒准备，让玩家放得下第一座塔
   waveInterval: 6,       // 波与波之间的间隔

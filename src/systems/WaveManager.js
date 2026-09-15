@@ -9,9 +9,9 @@
  */
 export const HP_GROWTH_PER_WAVE = 0.18
 
-export function hpForWave(baseHp, wave) {
+export function hpForWave(baseHp, wave, growth = HP_GROWTH_PER_WAVE) {
   const w = Math.max(1, wave)
-  return Math.round(baseHp * (1 + HP_GROWTH_PER_WAVE * (w - 1)))
+  return Math.round(baseHp * (1 + growth * (w - 1)))
 }
 
 export const PHASE = {
@@ -34,6 +34,8 @@ export class WaveManager {
     this.prepTime = opts.prepTime ?? 15
     /** 波与波之间的间隔 */
     this.waveInterval = opts.waveInterval ?? 8
+    /** HP 增长系数 —— 可由自动平衡脚本注入（正常游玩用默认值） */
+    this.hpGrowth = opts.hpGrowth ?? HP_GROWTH_PER_WAVE
 
     this.wave = 0                 // 当前波号，0 = 尚未开始
     this.spawnedInWave = 0
@@ -89,7 +91,7 @@ export class WaveManager {
         spawns.push({
           type: w.type,
           wave: this.wave,
-          hp: hpForWave(w.baseHp ?? 60, this.wave),
+          hp: hpForWave(w.baseHp ?? 60, this.wave, this.hpGrowth),
         })
         this.spawnedInWave += 1
         this.timer += interval

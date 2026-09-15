@@ -1,8 +1,9 @@
-// ResultScene —— 胜/败结算
+﻿// ResultScene —— 胜/败结算
 //
 // 展示本局统计（来自 GameScene.resultStats），并提供重玩 / 下一关 / 返回。
 
 import { LEVELS } from '../data/levels/index.js'
+import { px, setPixelScale } from '../systems/Layout.js'
 import { SFX } from '../systems/Audio.js'
 
 function fmtTime(sec) {
@@ -22,10 +23,12 @@ export default class ResultScene extends Phaser.Scene {
   }
 
   create() {
+    setPixelScale(window.PIXEL_SCALE || 1)
+    const S = (n) => px(n)
     const s = this.stats
 
     this.title = this.add.text(0, 0, this.win ? '通关！' : '失败', {
-      fontSize: '40px', color: this.win ? '#4ade80' : '#ff5c5c', fontStyle: 'bold',
+      fontSize: S(40) + 'px', color: this.win ? '#4ade80' : '#ff5c5c', fontStyle: 'bold',
     }).setOrigin(0.5)
 
     const body = s
@@ -40,13 +43,13 @@ export default class ResultScene extends Phaser.Scene {
       : ''
 
     this.statsText = this.add.text(0, 0, body, {
-      fontSize: '15px', color: '#cfe3f2', align: 'center', lineSpacing: 6,
+      fontSize: S(15) + 'px', color: '#cfe3f2', align: 'center', lineSpacing: S(6),
     }).setOrigin(0.5)
 
     // ── 按钮 ──
     this.retry = this.add.text(0, 0, '重玩', {
-      fontSize: '20px', color: '#0b0b0f', backgroundColor: '#4ade80',
-      padding: { x: 24, y: 12 },
+      fontSize: S(20) + 'px', color: '#0b0b0f', backgroundColor: '#4ade80',
+      padding: { x: S(24), y: S(12) },
     }).setOrigin(0.5).setInteractive({ useHandCursor: true })
     this.retry.on('pointerdown', () => {
       SFX.wave()
@@ -59,8 +62,8 @@ export default class ResultScene extends Phaser.Scene {
 
     this.next = nextLevel
       ? this.add.text(0, 0, `下一关：${nextLevel.name}`, {
-        fontSize: '17px', color: '#0b0b0f', backgroundColor: '#86efac',
-        padding: { x: 20, y: 10 },
+        fontSize: S(17) + 'px', color: '#0b0b0f', backgroundColor: '#86efac',
+        padding: { x: S(20), y: S(10) },
       }).setOrigin(0.5).setInteractive({ useHandCursor: true })
       : null
 
@@ -72,7 +75,7 @@ export default class ResultScene extends Phaser.Scene {
     }
 
     this.menu = this.add.text(0, 0, '返回菜单', {
-      fontSize: '15px', color: '#8fa6bb',
+      fontSize: S(15) + 'px', color: '#8fa6bb',
     }).setOrigin(0.5).setInteractive({ useHandCursor: true })
     this.menu.on('pointerdown', () => this.scene.start('Menu'))
 

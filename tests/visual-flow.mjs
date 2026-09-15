@@ -213,13 +213,27 @@ console.log('\n──── 4. 调试信息只在 ?debug=1 时出现 ───�
   const dbg = await page2.evaluate(() => {
     const g = window.game.scene.getScene('Game')
     const h = window.game.scene.getScene('Hud')
-    return { hint: g.hint.visible, hintText: g.hint.text, debugText: !!h.debugText,
-             debugBody: h.debugText ? h.debugText.text : '' }
+    const rect = (o) => ({ x: o.x, y: o.y, w: o.width, h: o.height })
+    const overlaps = (a, b) =>
+      a.x < b.x + b.w && b.x < a.x + a.w && a.y < b.y + b.h && b.y < a.y + a.h
+    const dbgRect = { x: h.debugText.x - h.debugText.width, y: h.debugText.y,
+                      w: h.debugText.width, h: h.debugText.height }
+    return {
+      hint: g.hint.visible, hintText: g.hint.text,
+      debugBody: h.debugText.text,
+      pauseOverlap: overlaps(rect(h.pauseBtn), dbgRect),
+      speedOverlap: overlaps(rect(h.speedBtn), dbgRect),
+      dbgRect, pause: rect(h.pauseBtn), speed: rect(h.speedBtn),
+    }
   })
   say('?debug=1 时底部提示条显示', dbg.hint === true)
   say('?debug=1 时含 cell 尺寸（验收项②要读）', /cell \d/.test(dbg.hintText), dbg.hintText)
-  say('?debug=1 时 HUD 调试面板存在', dbg.debugText === true)
-  say('调试面板含 FPS（验收项①要读）', /FPS/.test(dbg.debugBody), JSON.stringify(dbg.debugBody.slice(0, 40)))
+  say('调试面板含 FPS（验收项①要读）', /FPS/.test(dbg.debugBody), JSON.stringify(dbg.debugBody.slice(0, 30)))
+  say('调试面板不遮暂停按钮', !dbg.pauseOverlap,
+      `面板 x${dbg.dbgRect.x.toFixed(0)}–${(dbg.dbgRect.x + dbg.dbgRect.w).toFixed(0)} y${dbg.dbgRect.y.toFixed(0)}–${(dbg.dbgRect.y + dbg.dbgRect.h).toFixed(0)}` +
+      ` vs 暂停 x${dbg.pause.x.toFixed(0)}–${(dbg.pause.x + dbg.pause.w).toFixed(0)} y${dbg.pause.y.toFixed(0)}–${(dbg.pause.y + dbg.pause.h).toFixed(0)}`)
+  say('调试面板不遮加速按钮', !dbg.speedOverlap,
+      `面板 y${dbg.dbgRect.y.toFixed(0)}–${(dbg.dbgRect.y + dbg.dbgRect.h).toFixed(0)} vs 加速 y${dbg.speed.y.toFixed(0)}–${(dbg.speed.y + dbg.speed.h).toFixed(0)}`)
   await page2.close()
 }
 

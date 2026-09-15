@@ -42,7 +42,15 @@ await enterGame(page)     // 动态定位按钮，不依赖硬编码坐标
 
 // 页面内辅助：把 Phaser 对象的中心换算成可点击坐标
 await page.evaluate(() => {
-  const center = o => ({ x: o.x + o.width / 2, y: o.y + o.height / 2 })
+  // ⚠️ HiDPI：游戏内坐标是**逻辑像素**，而 page.mouse.click 收 **CSS 像素**。
+  //    启用物理像素渲染后（PIXEL_SCALE=2），逻辑宽 860 而屏幕 CSS 宽 430，
+  //    直接喂逻辑坐标会点偏一倍。所有从这里出去的坐标都必须先除以 PIXEL_SCALE。
+  const ps = () => window.PIXEL_SCALE || 1
+  const css = (lx, ly) => ({ x: lx / ps(), y: ly / ps() })
+  const center = (o) => {
+    const r = o.getBounds ? o.getBounds() : { x: o.x, y: o.y, width: o.width, height: o.height }
+    return css(r.x + r.width / 2, r.y + r.height / 2)
+  }
   window.__ui = {
     build: i => center(window.game.scene.getScene('Hud').buildButtons[i].text),
     cancel: () => center(window.game.scene.getScene('Hud').cancelBtn),
@@ -52,11 +60,11 @@ await page.evaluate(() => {
     speed: () => center(window.game.scene.getScene('Hud').speedBtn),
     cell: (cx, cy) => {
       const L = window.game.scene.getScene('Game').L
-      return {
-        x: L.originX + cx * L.cell + L.cell / 2,
-        y: L.originY + cy * L.cell + L.cell / 2,
-      }
+      return css(L.originX + cx * L.cell + L.cell / 2,
+                 L.originY + cy * L.cell + L.cell / 2)
     },
+    css,
+    ps,
     gs: () => window.game.scene.getScene('Game'),
     state: () => window.game.scene.getScene('Game').getState(),
     putEnemy: (pathDist, hp) => {
@@ -65,7 +73,8 @@ await page.evaluate(() => {
       const e = s.enemies[s.enemies.length - 1]
       e.pathDist = pathDist
       e.syncPixel(s.path, s.L)
-      return { x: e.x, y: e.y, hp: e.hp, maxHp: e.maxHp }
+      // 敌人位置是逻辑像素，同样要换算
+      return { ...css(e.x, e.y), hp: e.hp, maxHp: e.maxHp }
     },
     enemyHp: () => window.game.scene.getScene('Game').enemies.map(e => e.hp),
     panelVisible: () => window.game.scene.getScene('Hud').panelBg.visible,

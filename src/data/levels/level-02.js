@@ -29,7 +29,8 @@ export default {
 
   blocked: [],
 
-  startGold: 150,
+  // 200（原 150）：同 level-01 的理由，实测 200 后可通关（剩 4–8 命，仍有压力）
+  startGold: 200,
   startLives: 20,
   prepTime: 15,          // spec §6.5：首波 15 秒准备
   waveInterval: 6,       // 波与波之间的间隔

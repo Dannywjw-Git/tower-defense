@@ -12,16 +12,22 @@
 import { TOWER_ORDER, TOWERS, buildCost, upgradeCost } from '../data/towers.js'
 import { enemyDef } from '../data/enemies.js'
 import { SELL_REFUND_RATE } from '../systems/Economy.js'
+// 注意：SIDE_MAX / SIDE_RATIO 统一从 Layout.js 取，**不要在本文件重复定义**
+// —— 曾经这里还有一个 `const SIDE_MAX = 200`，与 import 撞名导致
+//    "Identifier 'SIDE_MAX' has already been declared"，整个游戏起不来。
+import { px, setPixelScale, SIDE_MAX_PX as SIDE_MAX, SIDE_RATIO } from '../systems/Layout.js'
 
 const FONT = '-apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", sans-serif'
-const SIDE_RATIO = 0.22
-const SIDE_MAX = 200
 
 /** 手机端「出售」需要二次确认，防止误触卖掉塔（spec §6.3） */
 const SELL_CONFIRM_MS = 3000
 
 /** 长按多久算「长按」（spec §6.2：长按弹文字说明，因为手机无 hover） */
 const HOLD_MS = 400
+
+/** 调试面板的行数与单行高度 —— 用于给它预留位置（见 layout 里的说明） */
+const DEBUG_LINES = 4
+const DEBUG_LINE_PX = 15
 
 export default class HudScene extends Phaser.Scene {
   constructor() {
@@ -32,8 +38,14 @@ export default class HudScene extends Phaser.Scene {
     // 注意：不能用 this.game（Phaser.Scene 的保留属性，指向 Phaser.Game）
     this.gs = this.scene.get('Game')
 
+    // ⚠️ HiDPI：本场景所有字号/间距都按 CSS 像素设计，必须先换算到逻辑像素。
+    //    漏掉任何一处，DPR≥2 的手机上那部分 UI 就会缩小一半。
+    //    统一走 systems/Layout.js 的 px()，禁止各处自己乘。
+    setPixelScale(window.PIXEL_SCALE || 1)
+    const S = (n) => px(n)
+
     this.status = this.add.text(0, 0, '', {
-      fontFamily: FONT, fontSize: '14px', color: '#cfe3f2', lineSpacing: 4,
+      fontFamily: FONT, fontSize: S(14) + 'px', color: '#cfe3f2', lineSpacing: S(4),
     })
 
     this.pauseBtn = this.makeMiniButton('⏸', () => {
@@ -52,7 +64,7 @@ export default class HudScene extends Phaser.Scene {
     // ── 信息面板（选中塔时出现）──
     this.panelBg = this.add.rectangle(0, 0, 10, 10, 0x000000, 0.82).setOrigin(0)
     this.panelText = this.add.text(0, 0, '', {
-      fontFamily: FONT, fontSize: '13px', color: '#e8e8ea', lineSpacing: 3,
+      fontFamily: FONT, fontSize: S(13) + 'px', color: '#e8e8ea', lineSpacing: S(3),
     })
     this.upBtn = this.makeMiniButton('升级', () => this.onUpgrade())
     this.sellBtn = this.makeMiniButton('出售', () => this.onSell())
@@ -70,8 +82,8 @@ export default class HudScene extends Phaser.Scene {
     if (this.debugOn) {
       this.debugText = this.add.text(0, 0, '', {
         fontFamily: 'ui-monospace, Menlo, Consolas, monospace',
-        fontSize: '11px', color: '#7fe07f', backgroundColor: '#000000cc',
-        padding: { x: 6, y: 4 }, align: 'right', lineSpacing: 2,
+        fontSize: S(11) + 'px', color: '#7fe07f', backgroundColor: '#000000cc',
+        padding: { x: S(6), y: S(4) }, align: 'right', lineSpacing: S(2),
       }).setOrigin(1, 0).setDepth(30)
     }
 
@@ -82,9 +94,10 @@ export default class HudScene extends Phaser.Scene {
   // ─────────────────────────── 组件工厂 ───────────────────────────
 
   makeMiniButton(label, onClick) {
+    const S = (n) => px(n)
     const t = this.add.text(0, 0, label, {
-      fontFamily: FONT, fontSize: '13px', color: '#cfe3f2',
-      backgroundColor: '#1d2a37', padding: { x: 9, y: 6 },
+      fontFamily: FONT, fontSize: S(13) + 'px', color: '#cfe3f2',
+      backgroundColor: '#1d2a37', padding: { x: S(9), y: S(6) },
     }).setInteractive({ useHandCursor: true })
     t.on('pointerdown', (_p, _x, _y, event) => {
       event.stopPropagation()
@@ -95,10 +108,11 @@ export default class HudScene extends Phaser.Scene {
 
   makeBuildButton(typeId) {
     const def = TOWERS[typeId]
+    const S = (n) => px(n)
     const t = this.add.text(0, 0, def.short, {
-      fontFamily: FONT, fontSize: '17px', color: '#0b0b0f',
-      backgroundColor: '#2b3d4f', padding: { x: 10, y: 9 },
-      fixedWidth: 34, align: 'center',
+      fontFamily: FONT, fontSize: S(17) + 'px', color: '#0b0b0f',
+      backgroundColor: '#2b3d4f', padding: { x: S(10), y: S(9) },
+      fixedWidth: S(34), align: 'center',
     }).setInteractive({ useHandCursor: true })
 
     // 短按 = 进入建造模式；长按 = 弹文字说明
@@ -158,71 +172,86 @@ export default class HudScene extends Phaser.Scene {
     const landscape = W > H
     this.landscape = landscape
 
+    // HiDPI：所有按 CSS 像素设计的尺寸都要换算（W/H 本身已是逻辑像素）
+    const S = (n) => px(n)
+    const sideMax = px(SIDE_MAX)
+
     if (landscape) {
-      const side = Math.min(SIDE_MAX, W * SIDE_RATIO)
+      const side = Math.min(sideMax, W * SIDE_RATIO)
       this.sideW = side
       // 左浮层：状态 + 暂停/加速
-      this.status.setPosition(10, 12)
-      this.pauseBtn.setPosition(10, H - 78)
-      this.speedBtn.setPosition(10, H - 44)
+      this.status.setPosition(S(10), S(12))
+      this.pauseBtn.setPosition(S(10), H - S(78))
+      this.speedBtn.setPosition(S(10), H - S(44))
 
       // 右浮层：建造栏竖排 + 取消
       // ⚠️ 整个栏**垂直居中**，不要从固定的 y=10 开始往下排 ——
       //    那样在大屏上（1440×900）建造栏会挤在顶部 268px 内、下方 70% 全空。
-      //    实测数据：812×375 尚可，1440×900 明显头重脚轻。
-      const btnH = Math.max(30, Math.min(44, (H - 60) / 7))
-      const bx = W - side + 14
-      const blockH = 6 * btnH + 8 + this.cancelBtn.height
-      const startY = Math.max(8, (H - blockH) / 2)
+      const btnH = Math.max(S(30), Math.min(S(44), (H - S(60)) / 7))
+      const bx = W - side + S(14)
+      const blockH = 6 * btnH + S(8) + this.cancelBtn.height
+      const startY = Math.max(S(8), (H - blockH) / 2)
 
       this.buildButtons.forEach((b, i) => {
         b.text.setPosition(bx, startY + i * btnH)
       })
-      this.cancelBtn.setPosition(bx, startY + 6 * btnH + 8)
+      this.cancelBtn.setPosition(bx, startY + 6 * btnH + S(8))
 
       this.layoutPanel(W, H, landscape, side)
     } else {
       this.sideW = 0
       // 顶部条
-      this.status.setPosition(10, 12)
-      this.pauseBtn.setPosition(W - 74, 10)
-      this.speedBtn.setPosition(W - 42, 10)
+      this.status.setPosition(S(10), S(12))
+      this.pauseBtn.setPosition(W - S(74), S(10))
+      this.speedBtn.setPosition(W - S(42), S(10))
 
       // 底部建造栏 3×2 —— 从屏幕底边往上排（不是从固定 baseY 往下摆），
       // 这样无论在 320×568 的小屏还是 430×932 的大屏，栏都稳稳贴住底边。
       const cols = 3
-      const bw = Math.min(64, (W - 32) / cols)
-      const bh = 40
-      const gap = 6
-      const baseY = H - 12 - (2 * bh + gap)          // 两行 + 行间距 + 底边距
+      const bw = Math.min(S(64), (W - S(32)) / cols)
+      const bh = S(40)
+      const gap = S(6)
+      const baseY = H - S(12) - (2 * bh + gap)       // 两行 + 行间距 + 底边距
       this.buildButtons.forEach((b, i) => {
         const cx = i % cols
         const cy = Math.floor(i / cols)
-        b.text.setPosition(12 + cx * (bw + gap), baseY + cy * (bh + gap))
+        b.text.setPosition(S(12) + cx * (bw + gap), baseY + cy * (bh + gap))
       })
-      this.cancelBtn.setPosition(12 + 2 * (bw + gap) + bw + gap, baseY + bh + gap)
+      this.cancelBtn.setPosition(S(12) + 2 * (bw + gap) + bw + gap, baseY + bh + gap)
 
       this.layoutPanel(W, H, landscape, 0)
     }
 
-    if (this.debugText) this.debugText.setPosition(W - 6, 6)
+    if (this.debugText) this.debugText.setPosition(W - S(6), S(6))
+
+    // ⚠️ 调试面板占右上角，必须让「暂停 / 1×」避开它 —— 否则整块盖住，玩家点不到加速。
+    //
+    // 关键坑：**不能用 `this.debugText.height`** —— 文本高度要到第一帧渲染后才确定，
+    //   而 layout() 在 create() 里就跑了，那时 height 还是 0。
+    //   初版据此算出 below=12，等于没让位（实测暂停仍在 y32、面板占 y6–68）。
+    //   这里改用**固定行高常量**，与渲染时机无关。
+    if (this.debugText && this.debugText.visible) {
+      const below = S(6) + DEBUG_LINES * S(DEBUG_LINE_PX) + S(8)
+      this.pauseBtn.setPosition(W - S(74), below)
+      this.speedBtn.setPosition(W - S(42), below)
+    }
   }
 
   layoutPanel(W, H, landscape, side) {
     const gs = this.gs
     const L = gs && gs.L
 
-    let pw, px, py
+    // HiDPI：本方法内所有数字都按 CSS 像素设计，统一过 px()
+    const S = (n) => px(n)
+    let pw, pxx, py
 
     if (landscape) {
       // 横屏：左侧浮层（地图水平居中，两侧本就是留白）
-      pw = Math.max(150, side - 20)
-      px = 10
-      py = 96
+      pw = Math.max(S(150), side - S(20))
+      pxx = S(10)
+      py = S(96)
     } else {
       // 竖屏：面板放在**地图正下方**。
-      // 地图是 8×5（宽高比 1.6）而手机竖屏是 0.46 —— 地图下方**必然**留出大片空白，
-      // 面板正好填在那里，既利用空间又不与任何控件冲突。
       //
       // ⚠️ 曾经写死 `py = H - 200`，结果面板底部压住了底部建造栏的**上排三个塔按钮**
       //    （箭/炮/冰），玩家根本点不到它们。
@@ -232,21 +261,20 @@ export default class HudScene extends Phaser.Scene {
       // ⚠️ 但在 320×568 这类小屏上，地图下方只剩约 100px，放不下 96px 的面板 + 间距，
       //    仍会压到建造栏（visual-flow 抓到过：面板 y347–443 vs 栏 y440–524）。
       //    所以这里取「地图下方」与「建造栏上方」两者的较小值，保证永不重叠。
-      pw = Math.min(W - 24, 320)
-      px = (W - pw) / 2
+      pw = Math.min(W - S(24), S(320))
+      pxx = (W - pw) / 2
 
-      const belowGrid = L ? (L.originY + L.gridH + 12) : (H * 0.5)
-      const barTop = H - 12 - (2 * 40 + 6) - 10       // 建造栏上沿再留 10px
-      const panelH = 96
-      py = Math.min(belowGrid, barTop - panelH)
-      py = Math.max(56, py)                            // 至少不撞顶部状态条
+      const belowGrid = L ? (L.originY + L.gridH + S(12)) : (H * 0.5)
+      const barTop = H - S(12) - (2 * S(40) + S(6)) - S(10)   // 建造栏上沿再留 10px
+      py = Math.min(belowGrid, barTop - S(96))
+      py = Math.max(S(56), py)                                 // 至少不撞顶部状态条
     }
 
-    this.panelBg.setPosition(px, py).setSize(pw, 96)
-    this.panelText.setPosition(px + 10, py + 8)
-    this.upBtn.setPosition(px + 10, py + 60)
-    this.sellBtn.setPosition(px + 82, py + 60)
-    this.closeBtn.setPosition(px + 154, py + 60)
+    this.panelBg.setPosition(pxx, py).setSize(pw, S(96))
+    this.panelText.setPosition(pxx + S(10), py + S(8))
+    this.upBtn.setPosition(pxx + S(10), py + S(60))
+    this.sellBtn.setPosition(pxx + S(82), py + S(60))
+    this.closeBtn.setPosition(pxx + S(154), py + S(60))
   }
 
   // ─────────────────────────── 每帧刷新 ───────────────────────────
