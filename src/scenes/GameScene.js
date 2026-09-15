@@ -604,12 +604,25 @@ export default class GameScene extends Phaser.Scene {
   }
 
   spawnTapEffect(enemy) {
-    const ring = this.add
-      .circle(enemy.x, enemy.y, Math.max(4, this.L.cell * 0.2), 0xffffff, 0.5)
-      .setDepth(15)
-    this.tweens.add({
+    // 复用**同一个**圆环，而不是每次 new + destroy。
+    //
+    // 为什么必须复用：spec §3.2 要求一律用对象池。补刀可以连点（冷却仅 250ms），
+    // 每次点击都创建并销毁一个显示对象会触发 GC 与渲染列表重建 ——
+    // 真机实测表现为「鼠标连续补刀时卡顿」。
+    if (!this.tapRing) {
+      this.tapRing = this.add.circle(-100, -100, 8, 0xffffff, 0.5)
+        .setDepth(15).setVisible(false)
+    }
+    const ring = this.tapRing
+    if (this.tapTween) this.tapTween.stop()      // 上一次动画还没结束就直接接管
+
+    ring.setPosition(enemy.x, enemy.y)
+      .setRadius(Math.max(4, this.L.cell * 0.2))
+      .setScale(1).setAlpha(0.5).setVisible(true)
+
+    this.tapTween = this.tweens.add({
       targets: ring, scale: 2.2, alpha: 0, duration: 220,
-      onComplete: () => ring.destroy(),
+      onComplete: () => ring.setVisible(false),   // 只隐藏，不销毁
     })
   }
 
