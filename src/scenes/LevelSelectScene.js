@@ -1,4 +1,4 @@
-﻿// LevelSelectScene —— 关卡选择
+// LevelSelectScene —— 关卡选择
 //
 // 按钮从关卡注册表动态生成，因此新增地图无需改本文件。
 // 通关状态与最佳战绩来自存档（spec §3.7）。
@@ -62,19 +62,31 @@ export default class LevelSelectScene extends Phaser.Scene {
   layout() {
     const W = this.scale.width
     const H = this.scale.height
+    // ⚠️ 本场景所有坐标都是**逻辑像素**（= CSS × PIXEL_SCALE，见 Layout.js L73-74）。
+    //    任何"按 CSS 像素设计的间距"都必须过 px()，否则在 DPR=2 的屏幕上只有一半，
+    //    表现就是「说明文字贴着按钮底、像被切掉」。
+    const S = (n) => px(n)
 
     this.title.setPosition(W / 2, H * 0.16)
     this.best.setPosition(W / 2, H * 0.25)
 
     const startY = H * 0.40
-    const gap = Math.min(96, H * 0.16)
+    const gap = Math.min(S(96), H * 0.16)
 
     this.items.forEach((item, i) => {
       const y = startY + i * gap
       item.label.setPosition(W / 2, y)
-      item.desc.setPosition(W / 2, y + 34)
+      // 说明文字放在按钮下沿**之外**。
+      //
+      // ⚠️ 不能用 `item.label.height` —— 文本高度要到第一帧渲染后才确定，
+      //    而 layout() 在 create() 里就跑了，那时 height 还是 0
+      //    （HudScene 的调试面板让位逻辑踩过同一个坑，见其注释）。
+      //    改用**由已知 padding/字号算出的按钮高度**，与渲染时机无关：
+      //      按钮高 = padding.y × 2 + 行高(≈fontSize × 1.2)
+      const labelH = S(12) * 2 + S(20) * 1.2
+      item.desc.setPosition(W / 2, y + labelH / 2 + S(12))
     })
 
-    this.back.setPosition(W / 2, H - 34)
+    this.back.setPosition(W / 2, H - S(34))
   }
 }

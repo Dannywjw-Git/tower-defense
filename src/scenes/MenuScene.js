@@ -1,4 +1,4 @@
-﻿// MenuScene —— 标题与入口
+// MenuScene —— 标题与入口
 
 import { unlock, SFX } from '../systems/Audio.js'
 import { px, setPixelScale } from '../systems/Layout.js'
@@ -51,11 +51,13 @@ export default class MenuScene extends Phaser.Scene {
   layout() {
     const W = this.scale.width
     const H = this.scale.height
+    // ⚠️ 坐标为逻辑像素，按 CSS 设计的边距必须过 px()（Layout.js L73-74）。
+    const S = (n) => px(n)
 
     this.title.setPosition(W / 2, H * 0.30)
     this.sub.setPosition(W / 2, H * 0.40)
     this.btn.setPosition(W / 2, H * 0.60)
     this.best.setPosition(W / 2, H * 0.72)
-    this.credit.setPosition(W / 2, H - 24)
+    this.credit.setPosition(W / 2, H - S(24))
   }
 }

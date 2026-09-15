@@ -210,7 +210,8 @@ export default class GameScene extends Phaser.Scene {
     this.hint.setVisible(true).setText(
       `cell ${this.L.cell.toFixed(1)}px · ${this.L.landscape ? '横屏' : '竖屏'} · ${next} · ` +
       `塔${s.towers} 怪${s.enemies} · 池 ${s.pools.enemy}/${s.pools.tower}/${s.pools.proj}`)
-    this.hint.setPosition(this.scale.width / 2, this.scale.height - 10)
+    // ⚠️ 坐标为逻辑像素 —— 底边距必须过 px()，否则 DPR=2 时只有一半
+    this.hint.setPosition(this.scale.width / 2, this.scale.height - px(10))
   }
 
   /** 供 HUD 与无头测试读取 */

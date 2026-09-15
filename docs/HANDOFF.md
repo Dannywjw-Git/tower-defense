@@ -18,7 +18,7 @@
 | 引擎 | Phaser 3.90.0（本地 `vendor/phaser.min.js`，1,086,308 B） |
 | 技术栈 | **原生 ES modules，无打包器、无 npm 依赖、无构建步骤** |
 | 规模 | `src/` 26 文件 · `tests/` 20 个脚本 |
-| 测试 | **399 项断言全绿 + 6 视口 0 JS 错误** |
+| 测试 | **402 项断言全绿 + 6 视口 0 JS 错误** |
 | git | 18 个提交，`main` 分支，工作区干净 |
 | 目标 | 部署到 GitHub Pages 给朋友玩（仓库已建、**待推送**） |
 
@@ -189,6 +189,20 @@ node scripts\serve.js 8788
   **必须过 `systems/Layout.js` 的 `px()`**，漏一处那部分 UI 就缩小一半。
 - **测试脚本也必须换算**：`page.mouse.click` 收 CSS 像素，游戏内坐标是逻辑像素。
   统一走 `tests/_nav.mjs` 的 `findButton()`（已内置换算）。
+- **⚠️ 反面清单（真实踩过，已修）**：以下都曾漏换算，表现为"字被切/贴边"，**不报错、测试也全绿**：
+
+  | 位置 | 错法 | 症状 |
+  |---|---|---|
+  | `LevelSelectScene.layout` | `y + 34`、`H - 34` | 说明文字压在按钮下沿（用户真机报的） |
+  | `MenuScene.layout` | `H - 24` | 致谢行贴死底边 |
+  | `GameScene` 调试提示 | `height - 10` | `?debug=1` 条贴死底边 |
+  | `tests/smoke-flow.mjs` | `cell*8` 直接比 CSS `width` | 假失败：报"网格溢出" |
+  | `HudScene` 按钮图标 | `text.geom` / `setAlpha(0)` | 图标没画 / 底色消失（见 §3 ③） |
+
+  **判据**：写下任何数字当间距/边距时，先问"这是 CSS 像素吗？" → 是就过 `px()`。
+- **⚠️ 不要用 `text.height` 做布局**：文本高度要**第一帧渲染后**才确定，
+  而 `layout()` 在 `create()` 里就跑，那时是 0。用**常量算式**代替
+  （HudScene 调试面板让位、LevelSelect 说明文字都踩过）。
 
 ### 4.2 测试禁止硬编码点击坐标
 
@@ -221,7 +235,7 @@ node tests\ui-flow.mjs           #  38 项真实鼠标点击 UI 交互
 node tests\phase6-flow.mjs       #  29 项地图2/胜负/引导/存档/音效
 node tests\stress-flow.mjs       #  11 项对象池复用与场景泄漏
 node tests\mechanics-flow.mjs    #  17 项机制组合（协同降级/溅射/连锁/减速/毒/集火）
-node tests\visual-flow.mjs       #  48 项视觉与布局结构（重叠/形状/血条/塔图标/调试面板）
+node tests\visual-flow.mjs       #  51 项视觉与布局结构（重叠/形状/血条/塔图标/字距/调试面板）
 node tests\human-flow.mjs        #  31 项完整人机流程预演
 node tests\icon-check.mjs        #   9 项塔图标自检（纯 node，无需浏览器）
 node tests\smoke-flow.mjs        #     场景链路 + 敌人行走
@@ -237,7 +251,7 @@ node tests\playthrough.mjs "http://192.168.1.8:8788" "教学" 4   # 真实端到
 node tests\verify-deploy.mjs     # 部署后线上验证
 ```
 
-**基线：384 项断言全绿 + 6 视口 0 错误。改完代码跑一遍，失败项会精确指向问题。**
+**基线：402 项断言全绿 + 6 视口 0 错误。改完代码跑一遍，失败项会精确指向问题。**
 
 ---
 

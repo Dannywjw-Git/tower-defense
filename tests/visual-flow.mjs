@@ -16,7 +16,7 @@ const PW = process.env.PLAYWRIGHT_CORE
 
 const BASE = (process.argv[2] || 'http://192.168.1.8:8788').replace(/\/$/, '')
 const { chromium } = await import(PW)
-const { enterGame } = await import('./_nav.mjs')
+const { enterGame, clickButton } = await import('./_nav.mjs')
 
 const CANDIDATES = [
   { channel: 'msedge', headless: true },
@@ -328,6 +328,45 @@ console.log('\n──── 6. 塔图标（C1：玩家能分辨 6 种塔）─�
   const drawnBtns = btn.filter(b => b.cmdCount > 0)
   say('6 个建造按钮都画了图标', drawnBtns.length === 6,
       `有图标的按钮 ${drawnBtns.length}/6`)
+
+  await page.close()
+}
+
+console.log('\n──── 7. 菜单类场景的字距（HiDPI 换算）────')
+{
+  // 起因（用户真机反馈）：960×450 窗口下「选择地图」的说明文字**贴着按钮底、像被切**。
+  // 根因：LevelSelectScene.layout() 里写了裸常量 `y + 34` / `H - 34`，
+  //   而本场景坐标是**逻辑像素**（DPR=2 时 CSS 的 2 倍），于是间距只有一半。
+  // 教训：凡是"按 CSS 像素设计的间距"都必须过 Layout.js 的 px()。
+  // 本段用 deviceScaleFactor=2 复现该环境，断言文字不与按钮重叠。
+  const page = await browser.newPage({
+    viewport: { width: 960, height: 450 }, deviceScaleFactor: 2,
+  })
+  await page.goto(BASE + '/index.html', { waitUntil: 'load', timeout: 30000 })
+  await page.waitForTimeout(1200)
+  await clickButton(page, 'Menu', '开始游戏')
+  await page.waitForTimeout(900)
+
+  const r = await page.evaluate(() => {
+    const s = window.game.scene.getScene('LevelSelect')
+    const ps = window.PIXEL_SCALE || 1
+    return {
+      ps,
+      items: s.items.map(i => ({
+        // 说明文字中心 与 按钮下沿 的距离（CSS 像素）
+        gapFromBtnBottom: (i.desc.y - i.label.y - i.label.height / 2) / ps,
+      })),
+      backBottomGap: (s.scale.height - s.back.y) / ps,
+    }
+  })
+
+  say('LevelSelect 说明文字不与按钮重叠', r.items.every(i => i.gapFromBtnBottom > 4),
+      r.items.map(i => i.gapFromBtnBottom.toFixed(1) + 'px').join(' / '))
+  say('LevelSelect 说明文字间距足够（≥8 CSS px）',
+      r.items.every(i => i.gapFromBtnBottom >= 8),
+      '最小 ' + Math.min(...r.items.map(i => i.gapFromBtnBottom)).toFixed(1) + 'px')
+  say('「返回」不贴死底边（≥16 CSS px）', r.backBottomGap >= 16,
+      r.backBottomGap.toFixed(1) + 'px')
 
   await page.close()
 }
