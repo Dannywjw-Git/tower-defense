@@ -19,9 +19,19 @@
 
 /** 单图素材：{ key, path, [width], [height] } */
 export const IMAGES = [
-  // { key: 'tower-arrow',  path: './assets/towers/arrow.png' },
-  // { key: 'enemy-normal', path: './assets/enemies/normal.png' },
-  // { key: 'tile-path',    path: './assets/tiles/path.png' },
+  // ── 地图装饰（Kenney Top-Down, CC0）──
+  // 8 张 64×64，共 10.7 KB。来源与选取理由见 docs/TERRAIN-PROBE.md：
+  //   Kenney 的**地面瓦片是纯色块**（实测颜色数=1），贴上去与代码绘制肉眼不可区分，
+  //   所以不用地面瓦片；只用这些**带透明底、真有细节**的物件。
+  // 不提交 3.86 MB 整包，也不提交 229 KB 图集 —— 只留用到的 8 张。
+  { key: 'decor-bush-lg',    path: './assets/decor/bush_lg.png' },
+  { key: 'decor-bush-sm',    path: './assets/decor/bush_sm.png' },
+  { key: 'decor-leaves',     path: './assets/decor/leaves.png' },
+  { key: 'decor-moss',       path: './assets/decor/moss.png' },
+  { key: 'decor-plant-star', path: './assets/decor/plant_star.png' },
+  { key: 'decor-rock-sm',    path: './assets/decor/rock_sm.png' },
+  { key: 'decor-rock-md',    path: './assets/decor/rock_md.png' },
+  { key: 'decor-rock-lg',    path: './assets/decor/rock_lg.png' },
 ]
 
 /** 图集：{ key, path, json } */

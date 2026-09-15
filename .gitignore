@@ -17,8 +17,16 @@ desktop.ini
 node_modules/
 
 # Kenney 素材（已下载但未接入 —— 零代码引用，纳入部署会白涨 3 MB）
-# 详见 docs/HANDOFF.md §3 ④「Kenney 素材接入」：素材为等距视图，与正交方格不兼容，方案待定。
-# 接入方案定案后，删掉此两行并只提交实际用到的图。
+# 详见 docs/HANDOFF.md §3 ④「Kenney 素材接入」。
+#   · kenney_tower-defense = **等距**版，与正交方格不兼容 → 永久排除
+#   · kenney_tower-defense-top-down = **正交**版，可用；但整包 3.86 MB 不进仓库，
+#     正式接入时只导出用到的 8 张装饰散图（实测共 10.7 KB）到 assets/
+#     见 docs/TERRAIN-PROBE.md「方向 2」
 src/kenney_tower-defense/
 src/kenney_tower-defense.zip
+src/kenney_tower-defense-top-down/
 commitmsg.txt
+
+# 探测/临时脚本产物（throwaway，不入正式产物）
+docs/screenshots/probe-*.png
+docs/screenshots/_*.png

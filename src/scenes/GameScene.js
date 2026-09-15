@@ -21,6 +21,7 @@ import { markCleared, markFailed, saveProgress } from '../systems/Save.js'
 import { Enemy } from '../entities/Enemy.js'
 import { Tower } from '../entities/Tower.js'
 import { Projectile } from '../entities/Projectile.js'
+import { layoutDecor, decorPixelRect, DECOR_ALPHA, DECOR_TINT, DECOR_TINT_STRENGTH } from '../systems/Decor.js'
 
 const COLOR = {
   [PATH]: 0x33475c,
@@ -128,8 +129,69 @@ export default class GameScene extends Phaser.Scene {
 
     this.setupInput()
     this.setupVisibilityPause()
-    this.layout()
+    this.layout()              // ⚠️ 必须先 layout：它算出 this.L，装饰要靠 L 定位
+    this.buildDecor()          // 装饰建好后由 syncDecorPixel 跟随 L
     this.scale.on('resize', () => this.layout())
+  }
+
+  // ═══════════════════════ 装饰 ═══════════════════════
+
+  /**
+   * 铺设地图装饰（灌木/石头等），纯视觉层。
+   *
+   * 为什么**不放在 `draw()` 里**：`draw()` 会被反复调用（每次切建造模式、每次重布局，
+   * 实测切 5 次建造模式就调 5 次）—— 在那里创建精灵会**重复创建 → 对象泄漏**。
+   * 所以单独一个方法，只在 `create()` 与重布局时调用。
+   *
+   * 层深 0.8：高于地面（0），**低于塔（2）** —— 保证塔永远压在装饰上面。
+   * 布局规则见 `src/systems/Decor.js`（纯函数，有 decor-check 断言）。
+   */
+  buildDecor() {
+    // 清掉旧的（重布局/重启场景时）
+    if (this.decorSprites) {
+      for (const s of this.decorSprites) s.destroy()
+    }
+    this.decorSprites = []
+    this.decorItems = []
+    this.decorByCell = new Map()
+
+    if (!this.L || !this.grid) return
+
+    const items = layoutDecor(this.grid)
+    this.decorItems = items          // 供 syncDecorPixel 复用（格坐标不变，只重算像素）
+    for (const it of items) {
+      if (!this.textures.exists(it.key)) continue      // 素材缺失时静默跳过（不白屏）
+      const r = decorPixelRect(it, this.L.originX, this.L.originY, this.L.cell)
+      const img = this.add.image(r.x, r.y, it.key)
+        .setDisplaySize(r.w, r.h)
+        .setDepth(0.8)
+      // 压暗降饱和：装饰必须退到背景层。
+      // 原因（看图才发现）：Kenney 灌木是 #2ECC71，而**箭塔是 #4ADE80** ——
+      // 色距仅 37（人眼 <40 分不开），第一版截图里灌木和箭塔看起来是一类东西。
+      // 这里直接用 setTint（Phaser 会与原图相乘），比叠两层精灵简单得多。
+      if (DECOR_TINT_STRENGTH > 0) img.setTint(DECOR_TINT)
+      img.setAlpha(DECOR_ALPHA)
+      this.decorSprites.push(img)
+      // 按格坐标索引：建塔/卖塔时联动显隐，不用重建整层
+      const k = it.cy * 1000 + it.cx
+      if (!this.decorByCell.has(k)) this.decorByCell.set(k, [])
+      this.decorByCell.get(k).push(img)
+    }
+  }
+
+  /** 装饰随格子同步显隐（建塔时隐藏，卖塔时恢复） */
+  syncDecorForCell(cx, cy, visible) {
+    const list = this.decorByCell && this.decorByCell.get(cy * 1000 + cx)
+    if (!list) return
+    for (const s of list) s.setVisible(visible)
+  }
+
+  /** 建造模式切换时，装饰淡出以免遮住"可建格"绿色高亮 */
+  syncDecorForBuildMode(on) {
+    if (!this.decorSprites) return
+    for (const s of this.decorSprites) {
+      s.setAlpha(on ? DECOR_ALPHA * 0.4 : DECOR_ALPHA)
+    }
   }
 
   // ═══════════════════════ 布局 ═══════════════════════
@@ -137,9 +199,21 @@ export default class GameScene extends Phaser.Scene {
   layout() {
     this.L = computeLayout(this.scale.width, this.scale.height, window.PIXEL_SCALE || 1)
     this.draw()
+    this.syncDecorPixel()      // 转屏/换尺寸时装饰要跟着挪（与塔同源换算）
     for (const e of this.enemies) e.syncPixel(this.path, this.L)
     for (const t of this.towers) t.syncPixel(this.L)
     this.updateHint()
+  }
+
+  /** 按当前 L 重新摆放装饰精灵（格坐标不变，只重算像素位置与尺寸） */
+  syncDecorPixel() {
+    if (!this.L || !this.decorItems || !this.decorSprites) return
+    this.decorItems.forEach((it, i) => {
+      const s = this.decorSprites[i]
+      if (!s) return
+      const r = decorPixelRect(it, this.L.originX, this.L.originY, this.L.cell)
+      s.setPosition(r.x, r.y).setDisplaySize(r.w, r.h)
+    })
   }
 
   draw() {
@@ -372,6 +446,7 @@ export default class GameScene extends Phaser.Scene {
     t.place(cx, cy, typeId)
     t.syncPixel(this.L)
     this.towers.push(t)
+    this.syncDecorForCell(cx, cy, false)   // 建塔后隐藏该格装饰，避免与塔重叠
 
     this.recomputeSynergy()
     this.stats.built += 1
@@ -409,6 +484,7 @@ export default class GameScene extends Phaser.Scene {
     if (this.selectedTower === t) this.selectedTower = null
     t.setVisible(false)
     this.towerPool.push(t)
+    this.syncDecorForCell(cx, cy, true)    // 卖塔后恢复该格装饰
 
     this.recomputeSynergy()
     this.stats.sold += 1
@@ -503,6 +579,7 @@ export default class GameScene extends Phaser.Scene {
 
   setBuildMode(typeId) {
     this.buildMode = typeId || null
+    this.syncDecorForBuildMode(!!this.buildMode)   // 建造模式下装饰淡出，露出可建高亮
     this.draw()
   }
 
@@ -520,9 +597,15 @@ export default class GameScene extends Phaser.Scene {
       if (document.hidden) this.paused = true
     }
     document.addEventListener('visibilitychange', this._onVisibility)
-    // 场景重启时移除，避免监听器累积
+    // 场景重启时移除，避免监听器累积；同时销毁装饰精灵（防场景泄漏）
     this.events.once('shutdown', () => {
       document.removeEventListener('visibilitychange', this._onVisibility)
+      if (this.decorSprites) {
+        for (const s of this.decorSprites) s.destroy()
+        this.decorSprites = []
+      }
+      this.decorItems = []
+      if (this.decorByCell) this.decorByCell.clear()
     })
   }
 
