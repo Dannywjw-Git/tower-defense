@@ -19,8 +19,8 @@
 | 技术栈 | **原生 ES modules，无打包器、无 npm 依赖、无构建步骤** |
 | 规模 | `src/` 25 文件 · 2389 行 · `tests/` 17 个脚本 |
 | 测试 | **384 项断言全绿 + 6 视口 0 JS 错误** |
-| git | 17 个提交，`main` 分支，工作区干净 |
-| 目标 | 部署到 GitHub Pages 给朋友玩（**尚未上线**） |
+| git | 18 个提交，`main` 分支，工作区干净 |
+| 目标 | 部署到 GitHub Pages 给朋友玩（仓库已建、**待推送**） |
 
 ---
 
@@ -83,15 +83,20 @@ node scripts\serve.js 8788
 
 ### ① 部署上线（唯一阻塞"给朋友玩"的事）
 
-**已铺好**：git 仓库就绪 · `remote origin` 已配 · 凭据管理器已有 GitHub 凭据 · 防火墙已放行。
+**已铺好**：git 仓库就绪 · `remote origin` 已配 · **GitHub 通路已实测调通**（token 有 `repo` 权限）·
+**目标仓库已存在**（公开，当前为空仓库）。
 
-**只需三步**：
-1. 建空仓库 https://github.com/new → 名字 **`tower-defense`** → **三个初始化选项都不勾**
-2. `git push -u origin main`
-3. 仓库 Settings → Pages → Branch `main` + `/ (root)` → Save
+**只需两步**：
+1. `git push -u origin main`
+2. 仓库 Settings → Pages → Branch `main` + `/ (root)` → Save
 
 **推完验证**：`node tests\verify-deploy.mjs`
 预期上线地址：`https://Dannywjw-Git.github.io/tower-defense/`
+
+> **凭据用法**：`GITHUB_ACCESS_TOKEN` 已在用户级环境变量中。
+> 若 `git push` 报 `SEC_E_NO_CREDENTIALS`，是 `credential.helper=manager` 的问题，
+> 不是网络故障——绕过 helper（`git -c credential.helper=`）或复用 URL 内嵌 token 即可。
+> 详见 `docs/progress.md`「GitHub 通路核实」。
 
 ### ② 补测 FPS 数值
 
@@ -109,7 +114,29 @@ node scripts\serve.js 8788
 
 当前**全部是代码绘制的占位**（纯色方块 + 文字按钮 + Web Audio 合成音效）。
 接入点：`assets/assets.js`（清单，当前三个数组全空）。
-⚠️ 素材需人工从 kenney.nl 下载，**AI 无法访问该站**。
+
+**素材已下载**（2026-09-15）：`src/kenney_tower-defense/`
+—— Kenney Tower Defense (isometric)，**CC0**，242 文件 / 1.47 MB。
+含 `PNG/`（Landscape · Towers brown/grey/red 各 55 张）+ `Spritesheet/`（4 组图集 + XML）。
+
+> ⚠️ **重大不兼容（接入前必读）**：这批素材是**等距（isometric / 2.5D 斜 45°）视图**，
+> 菱形底座 + 立体侧面。而本项目是 **正交俯视 + 正方形格子**（8×5，规格见 spec §4.3）。
+> **直接贴图会出现"斜着的塔摆在正着的方格上"**，菱形底座对不上方形格子，每座塔都是歪的。
+>
+> 三条路线（**待定，未选择**）：
+> - **甲**：全面改等距 —— 重做 `MapGrid`/`Layout`/`PathMath`/全部渲染 + 重画 2 张地图几何。
+>   **属重做级（Architectural），会推翻 spec §4.3 的 8×5 几何前提**。
+> - **乙**：只挑可正交使用的部分（如 Landscape 部分地砖），塔保持自绘。仍是 Bounded，但需逐个挑图。
+> - **丙**：**本轮不接素材**，先做 C1 塔颜色辨识（零素材依赖）。⭐ 推荐
+>
+> **部署影响（实测）**：素材**零代码引用**（已核实：`src/` 中无任何 `load.image` /
+> `load.spritesheet` / `load.atlas` 调用；唯一出现的 3 处 "Kenney" 是注释与致谢文案）。
+> 即素材目前是**纯死重**。若随游戏一并提交，部署产物体积将
+> **4184 KB → 7194 KB**（+72%，含 1.5 MB 的重复 zip）。
+>
+> **决定**：素材**暂不纳入部署**（加入 `.gitignore`），等接入方案定案后再处理。
+> 理由：它们会被 Phaser 的静态托管原样上传，却一帧都用不到；
+> 而本项目首要目标是"朋友点开就能玩"（首屏 ≤5s），为死重付加载代价不划算。
 
 ---
 
